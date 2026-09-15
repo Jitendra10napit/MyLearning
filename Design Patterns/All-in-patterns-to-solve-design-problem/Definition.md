@@ -1,4 +1,4 @@
-##1. What is a Design Pattern?
+## 1. What is a Design Pattern?
 
 A design pattern is a reusable solution approach to a recurring software-design problem.
 
@@ -6,7 +6,7 @@ It is not a library, framework, or piece of code that you blindly copy.
 
 ## For example:
 
-Problem:
+##Problem:
 I need to create different payment providers.
 
 Current code:
