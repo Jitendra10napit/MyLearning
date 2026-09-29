@@ -634,3 +634,398 @@ IP           → "Which client?"
 Path         → "Which URL?"
 Geo          → "Where is the user?"
 ```
+
+
+--------------------------------------------L4/L7------------------------------------------------------------------------
+
+The key idea is:
+
+> **The Load Balancer doesn't guess whether a request is TCP, UDP, or HTTP. It knows from the network protocol/connection information and from what it is configured to handle.**
+
+### Think in layers
+
+```text
+Application
+    │
+    │ HTTP
+    ▼
+Transport
+    │
+    │ TCP / UDP
+    ▼
+Internet
+    │
+    │ IP
+    ▼
+Network
+```
+
+For a typical HTTPS request:
+
+```text
+Browser
+   │
+   │ HTTP request
+   ▼
+HTTPS
+   │
+   │ TLS
+   ▼
+TCP
+   │
+   │ IP packet
+   ▼
+Load Balancer
+```
+
+So **HTTP is carried over TCP** in the traditional HTTP/1.1 and HTTP/2 model.
+
+---
+
+## 1. How does L4 know?
+
+An L4 load balancer looks at the **IP packet and transport header**.
+
+For example:
+
+```text
+Source IP       = 10.1.1.20
+Destination IP  = 20.10.10.5
+Protocol        = TCP
+Source Port     = 52341
+Destination Port= 443
+```
+
+The `Protocol` field tells the network layer that this is TCP.
+
+So the LB sees:
+
+```text
+IP
+ └── Protocol = TCP
+       └── Port = 443
+```
+
+It can then forward the TCP connection to:
+
+```text
+Server 1
+Server 2
+Server 3
+```
+
+It doesn't need to understand:
+
+```http
+GET /orders/123
+```
+
+That's why we call it **Layer 4 load balancing**.
+
+---
+
+# 2. What about UDP?
+
+Suppose you have a UDP packet:
+
+```text
+Source IP        = 10.1.1.20
+Destination IP   = 20.10.10.5
+Protocol         = UDP
+Source Port      = 50000
+Destination Port = 53
+```
+
+The LB sees:
+
+```text
+IP
+ └── Protocol = UDP
+       └── Port = 53
+```
+
+So it knows:
+
+> "This is a UDP flow."
+
+It can route the UDP traffic accordingly.
+
+---
+
+# 3. How does L7 know it's HTTP?
+
+This is where it gets interesting.
+
+An **L7 load balancer understands the application protocol**.
+
+For HTTP/1.1, it can see something like:
+
+```http
+GET /orders/123 HTTP/1.1
+Host: api.example.com
+Authorization: Bearer ...
+```
+
+Now it can make decisions such as:
+
+```text
+/orders/*    → Order Service
+/users/*     → User Service
+/payments/*  → Payment Service
+```
+
+So:
+
+```text
+L4:
+"TCP connection → Server 2"
+
+L7:
+"HTTP request /orders → Order Service"
+```
+
+---
+
+# 4. But HTTPS is encrypted — how can L7 see HTTP?
+
+Excellent architectural point.
+
+With HTTPS:
+
+```text
+Client
+   │
+   │ encrypted HTTPS
+   ▼
+Load Balancer
+```
+
+The HTTP contents are encrypted.
+
+Therefore, if the LB needs to perform L7 routing, it commonly performs **TLS termination**:
+
+```text
+Client
+   │
+   │ HTTPS
+   ▼
+┌──────────────────┐
+│ Load Balancer    │
+│ TLS termination  │
+└────────┬─────────┘
+         │
+         │ HTTP or HTTPS
+         ▼
+      Backend
+```
+
+The LB decrypts the request, allowing it to inspect:
+
+```text
+HTTP method
+URL path
+Headers
+Host
+Cookies
+```
+
+For example:
+
+```text
+GET /orders/123
+        │
+        ▼
+Load Balancer
+        │
+        └── /orders/* → Order Service
+```
+
+It can then establish a new connection to the backend.
+
+---
+
+# 5. What about HTTP/2 and HTTP/3?
+
+This is where the architecture gets more interesting.
+
+### HTTP/1.1
+
+Typically:
+
+```text
+HTTP
+ ↓
+TCP
+ ↓
+IP
+```
+
+### HTTP/2
+
+Typically:
+
+```text
+HTTP/2
+ ↓
+TCP
+ ↓
+IP
+```
+
+### HTTP/3
+
+HTTP/3 uses **QUIC**, which runs over UDP:
+
+```text
+HTTP/3
+ ↓
+QUIC
+ ↓
+UDP
+ ↓
+IP
+```
+
+So don't memorize:
+
+> "HTTP always means TCP."
+
+Instead remember:
+
+> **HTTP is an application-layer protocol. TCP/UDP are transport-layer protocols.**
+
+---
+
+# 6. Very important distinction
+
+This is the part I would remember for your Staff/Architect interview:
+
+```text
+             Application
+                  │
+             HTTP / HTTP/2
+                  │
+          ┌───────┴───────┐
+          │               │
+         TCP             QUIC
+          │               │
+          │              UDP
+          │               │
+          └───────┬───────┘
+                  ▼
+                 IP
+```
+
+So:
+
+### L4 LB asks:
+
+> **"What transport protocol/connection is this?"**
+
+```text
+TCP?
+UDP?
+Port?
+IP?
+```
+
+### L7 LB asks:
+
+> **"What application request is this?"**
+
+```text
+HTTP?
+GET /orders?
+Host?
+Headers?
+Cookie?
+```
+
+---
+
+# 7. Real example
+
+Suppose your application receives:
+
+```text
+https://api.company.com/orders/123
+```
+
+The traffic might look conceptually like:
+
+```text
+                 Browser
+                    │
+                    ▼
+              HTTPS request
+                    │
+                    ▼
+               TCP connection
+                 Port 443
+                    │
+                    ▼
+             ┌─────────────┐
+             │ Load Balancer│
+             └─────────────┘
+```
+
+### L4 LB
+
+Sees:
+
+```text
+TCP
+Port 443
+```
+
+and says:
+
+> "I'll send this TCP connection to API Server 2."
+
+### L7 LB
+
+After TLS termination, sees:
+
+```http
+GET /orders/123
+Host: api.company.com
+```
+
+and says:
+
+> "This is an orders request. Send it to Order Service."
+
+---
+
+## 🧠 One picture to remember
+
+```text
+                  REQUEST
+                     │
+                     ▼
+              ┌─────────────┐
+              │ Load Balancer│
+              └──────┬──────┘
+                     │
+             What can I see?
+                     │
+          ┌──────────┴──────────┐
+          ▼                     ▼
+       L4 LB                  L7 LB
+          │                     │
+    IP / TCP / UDP          HTTP details
+    Port                    Path
+                            Host
+                            Headers
+          │                     │
+          ▼                     ▼
+   "Which connection?"   "Which application?"
+```
+
+### Interview one-liner
+
+> **"L4 determines routing using network and transport information such as IP, TCP/UDP and ports, while L7 can inspect the application protocol such as HTTP and route based on paths, hosts, headers or other application-level information."**
+
+And the crucial point:
+
+> **The LB knows TCP/UDP from the IP/transport headers; it knows HTTP when it is operating at L7 and can parse the application protocol, often after TLS termination for HTTPS.**
