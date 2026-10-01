@@ -1283,4 +1283,230 @@ Validate production impact
 **Say:** *"I established a baseline, changed the access path, and verified the improvement through execution plan, logical reads, CPU and latency."*
 
 
-########################xxxxxxxxxxxxxxxxxxxx###################---------------------------------------------------------------------------
+-----------------------------------------------------------------xxxxxxxxx----------------------------------------------------
+
+
+This creates a **nonclustered composite (covering) index**.
+
+```sql
+CREATE INDEX IX_Orders_Customer_Status_Created
+ON Orders
+(
+    CustomerId,
+    Status,
+    CreatedDate DESC
+)
+INCLUDE
+(
+    OrderId,
+    TotalAmount
+);
+```
+
+Let's break it down.
+
+### 1. Nonclustered index
+
+Because you wrote:
+
+```sql
+CREATE INDEX
+```
+
+and not:
+
+```sql
+CREATE CLUSTERED INDEX
+```
+
+SQL Server creates a **nonclustered index** by default.
+
+```text id="fh3t0y"
+Orders Table
+     │
+     ├── Clustered Index
+     │
+     └── Nonclustered Index
+          IX_Orders_Customer_Status_Created
+```
+
+---
+
+### 2. Composite index
+
+You have **three key columns**:
+
+```sql
+(
+    CustomerId,
+    Status,
+    CreatedDate DESC
+)
+```
+
+Therefore, it's a **composite index**.
+
+The order is important:
+
+```text id="9lph7g"
+CustomerId
+     ↓
+Status
+     ↓
+CreatedDate DESC
+```
+
+SQL Server can efficiently use the index for queries that match the **leading columns**.
+
+For example:
+
+```sql
+WHERE CustomerId = 1001
+  AND Status = 'Pending'
+ORDER BY CreatedDate DESC
+```
+
+is a very good match.
+
+---
+
+### 3. `INCLUDE` makes it covering for this query
+
+These:
+
+```sql
+INCLUDE
+(
+    OrderId,
+    TotalAmount
+)
+```
+
+are **included/non-key columns**.
+
+They are stored in the leaf level of the nonclustered index but are **not part of the index key/order**.
+
+So conceptually:
+
+```text id="c7e1kz"
+Index Key
+────────────────────────
+CustomerId
+Status
+CreatedDate DESC
+────────────────────────
+Included Columns
+────────────────────────
+OrderId
+TotalAmount
+```
+
+Why?
+
+Suppose your query is:
+
+```sql
+SELECT
+    OrderId,
+    CustomerId,
+    Status,
+    TotalAmount,
+    CreatedDate
+FROM Orders
+WHERE CustomerId = 1001
+  AND Status = 'Pending'
+ORDER BY CreatedDate DESC;
+```
+
+The index contains everything required by the query:
+
+```text id="m9p4m6"
+CustomerId       ← key
+Status           ← key
+CreatedDate      ← key
+OrderId          ← INCLUDE
+TotalAmount      ← INCLUDE
+```
+
+Therefore SQL Server may be able to satisfy the query directly from the nonclustered index without going back to the clustered index for those columns.
+
+That's why we call it a **covering index for that query**.
+
+---
+
+### 4. Why `CreatedDate DESC`?
+
+Your query has:
+
+```sql
+ORDER BY CreatedDate DESC
+```
+
+So putting:
+
+```sql
+CreatedDate DESC
+```
+
+in the index can help SQL Server retrieve the rows in the required ordering without an additional expensive sort.
+
+Conceptually:
+
+```text id="bky5u8"
+CustomerId = 1001
+      │
+      ▼
+Status = Pending
+      │
+      ▼
+CreatedDate DESC
+      │
+      ▼
+Already ordered
+      │
+      ▼
+Return rows
+```
+
+---
+
+## Interview answer
+
+If the interviewer asks:
+
+> **"What type of index is this?"**
+
+Say:
+
+> **“This is a nonclustered composite index with three key columns—CustomerId, Status and CreatedDate—and OrderId and TotalAmount are included columns. Because the included columns satisfy the SELECT list, it can act as a covering index for this particular query. The key ordering also supports the filtering and the `ORDER BY CreatedDate DESC` operation.”**
+
+### One important nuance
+
+Don't call it simply a **"covering index"** as if covering were a separate SQL Server index type.
+
+The technically precise description is:
+
+> **Nonclustered composite index that covers a particular query.**
+
+Also remember:
+
+```text
+CREATE INDEX
+      ↓
+Nonclustered by default
+
+Multiple key columns
+      ↓
+Composite index
+
+INCLUDE columns
+      ↓
+Can make it covering
+
+DESC key
+      ↓
+Can support required ordering
+```
+
+And one architectural caveat: **indexes aren't free**. This index improves the target read pattern but adds storage and maintenance cost to `INSERT`, `UPDATE`, and `DELETE` operations, so you should validate it against the overall workload.
+
