@@ -799,3 +799,860 @@ So my mental model is: OIDC answers ‘Who are you?’, OAuth 2.0 answers ‘Wha
 ### One line to remember
 
 **OIDC = Authentication → OAuth 2.0 = Authorization → JWT = Token format.**
+
+
+
+
+Yes. Let's take a **real Angular + .NET Web API + Microsoft Entra ID (Azure AD)** example, because that is very close to what you'd discuss as a Senior/Staff .NET engineer.
+
+## Real-world scenario
+
+Suppose your company has:
+
+```text
+Frontend:
+https://app.company.com
+        │
+        ▼
+Angular Application
+        │
+        │ Login
+        ▼
+Microsoft Entra ID
+        │
+        ▼
+.NET Web API
+https://api.company.com
+```
+
+The user wants to access:
+
+```text
+Orders
+Customer profile
+```
+
+We use **OIDC Authorization Code Flow + PKCE**.
+
+---
+
+# 1. User opens the application
+
+User enters:
+
+```text
+https://app.company.com
+```
+
+Angular application checks:
+
+```text
+Am I authenticated?
+```
+
+No.
+
+So Angular redirects the browser to the Identity Provider.
+
+The actual URL might look like:
+
+```text
+https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize
+    ?client_id=8f123456-....
+    &response_type=code
+    &redirect_uri=https%3A%2F%2Fapp.company.com%2Fcallback
+    &scope=openid%20profile%20email%20orders.read
+    &code_challenge=ABC123...
+    &code_challenge_method=S256
+    &state=xyz789
+    &nonce=n123
+```
+
+Your original example:
+
+```text
+GET /authorize?
+    client_id=angular-client
+    &response_type=code
+    &scope=openid profile email orders.read
+    &redirect_uri=https://app.company.com/callback
+    &code_challenge=...
+```
+
+is therefore basically saying:
+
+> **"Identity Provider, authenticate this Angular application user and, if successful, give my application an authorization code that I can exchange for tokens."**
+
+---
+
+# 2. Let's understand every parameter
+
+This is the part interviewers often ask.
+
+### `client_id`
+
+```text
+client_id=angular-client
+```
+
+Identifies the application.
+
+For example, Entra ID may have:
+
+```text
+Application:
+Company Angular Portal
+
+Client ID:
+8f123456-1234-4567-8901-abcdef123456
+```
+
+It does **not** identify the user.
+
+Think:
+
+```text
+client_id = Who is requesting authentication?
+```
+
+---
+
+### `response_type=code`
+
+```text
+response_type=code
+```
+
+Means:
+
+> "After successful authentication, return an authorization code."
+
+Not the access token directly.
+
+The browser receives:
+
+```text
+code=0.AbcXYZ...
+```
+
+The code is temporary and short-lived.
+
+---
+
+# 3. Why don't we return an access token directly?
+
+Because this is a browser application.
+
+We don't want:
+
+```text
+Browser
+   ↓
+Authorization Server
+   ↓
+Access Token in URL
+```
+
+Instead:
+
+```text
+Browser
+   ↓
+Authorization Server
+   ↓
+Authorization Code
+   ↓
+Token Endpoint
+   ↓
+Access Token
+```
+
+This reduces exposure of tokens through the browser redirect.
+
+And **PKCE** protects the authorization code exchange.
+
+---
+
+# 4. `redirect_uri`
+
+```text
+redirect_uri=https://app.company.com/callback
+```
+
+This tells Entra ID:
+
+> "After authentication, send the browser back here."
+
+So:
+
+```text
+Angular
+   ↓
+Entra ID
+   ↓
+Login
+   ↓
+https://app.company.com/callback?code=ABC123
+```
+
+The redirect URI must be registered with the Identity Provider.
+
+For example:
+
+```text
+Registered Redirect URI:
+
+https://app.company.com/callback
+```
+
+This prevents an attacker from changing it to:
+
+```text
+https://attacker.com/callback
+```
+
+---
+
+# 5. `scope`
+
+Your example has:
+
+```text
+scope=openid profile email orders.read
+```
+
+There are actually different concepts here.
+
+### `openid`
+
+This is the important one for **OIDC**.
+
+It tells the Identity Provider:
+
+> "I want authentication / identity information."
+
+Without:
+
+```text
+openid
+```
+
+you're primarily talking about OAuth rather than an OIDC authentication request.
+
+---
+
+### `profile`
+
+Requests standard profile claims such as:
+
+```text
+name
+preferred_username
+```
+
+depending on the Identity Provider.
+
+---
+
+### `email`
+
+Requests email-related identity information when available/authorized.
+
+---
+
+### `orders.read`
+
+This is an **API permission/scope**.
+
+It means:
+
+> "The Angular application wants permission to call the Orders API for read operations."
+
+So:
+
+```text
+openid
+profile
+email
+```
+
+are primarily about **identity/user information**.
+
+While:
+
+```text
+orders.read
+```
+
+is an **API authorization scope**.
+
+---
+
+# 6. `code_challenge`
+
+This is the most important PKCE concept.
+
+Before redirecting to Entra ID, Angular generates:
+
+```text
+code_verifier
+```
+
+For example:
+
+```text
+code_verifier =
+dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
+```
+
+Then it calculates:
+
+```text
+code_challenge =
+BASE64URL(
+    SHA256(code_verifier)
+)
+```
+
+Conceptually:
+
+```text
+code_verifier
+      │
+      ▼
+    SHA256
+      │
+      ▼
+code_challenge
+```
+
+Angular sends only:
+
+```text
+code_challenge=ABCXYZ...
+```
+
+to the authorization endpoint.
+
+The actual:
+
+```text
+code_verifier
+```
+
+is kept by the application/browser and is sent later during the token exchange.
+
+---
+
+# 7. User logs in
+
+The browser now shows:
+
+```text
+Microsoft Sign In
+
+Email:
+user@company.com
+
+Password:
+********
+```
+
+Possibly MFA:
+
+```text
+Approve sign-in request
+```
+
+Entra ID authenticates the user.
+
+Then it evaluates:
+
+```text
+Who is the user?
+Is the application registered?
+Is redirect URI valid?
+Is requested scope allowed?
+Does consent exist?
+```
+
+---
+
+# 8. Authorization Code is returned
+
+After successful login:
+
+```text
+302 Redirect
+```
+
+to:
+
+```text
+https://app.company.com/callback
+```
+
+with:
+
+```text
+https://app.company.com/callback
+    ?code=0.AbcXYZ123...
+    &state=xyz789
+```
+
+Angular receives:
+
+```text
+code
+```
+
+Important:
+
+> **The authorization code is not the access token.**
+
+---
+
+# 9. Angular exchanges code for tokens
+
+Angular calls the token endpoint:
+
+```text
+POST https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token
+```
+
+with something conceptually like:
+
+```text
+grant_type=authorization_code
+
+client_id=angular-client
+
+code=0.AbcXYZ123...
+
+redirect_uri=https://app.company.com/callback
+
+code_verifier=dBjftJeZ4CVP-mB92K27...
+```
+
+Notice something important:
+
+```text
+Original request:
+code_challenge
+```
+
+Now:
+
+```text
+Token request:
+code_verifier
+```
+
+---
+
+# 10. How does PKCE protect us?
+
+Identity Provider remembers:
+
+```text
+code_challenge = SHA256(code_verifier)
+```
+
+Later Angular sends:
+
+```text
+code_verifier
+```
+
+Identity Provider calculates:
+
+```text
+SHA256(received code_verifier)
+```
+
+and checks:
+
+```text
+SHA256(code_verifier)
+        ==
+original code_challenge
+```
+
+If yes:
+
+```text
+Token issued
+```
+
+If no:
+
+```text
+❌ Authorization failed
+```
+
+This means stealing the authorization code alone isn't enough.
+
+---
+
+# 11. Token response
+
+The Identity Provider returns something conceptually like:
+
+```json
+{
+  "token_type": "Bearer",
+  "scope": "openid profile email orders.read",
+  "expires_in": 3600,
+  "access_token": "eyJhbGciOiJSUzI1NiIs...",
+  "id_token": "eyJhbGciOiJSUzI1NiIs..."
+}
+```
+
+Now we have two important tokens:
+
+```text
+ID Token
+Access Token
+```
+
+---
+
+# 12. ID Token vs Access Token
+
+This is a **very important interview question**.
+
+### ID Token
+
+Purpose:
+
+> **Tell the client who authenticated.**
+
+For example, it can contain claims such as:
+
+```json
+{
+  "sub": "12345",
+  "name": "Jitendra",
+  "preferred_username": "user@company.com"
+}
+```
+
+Angular uses this for authentication/user identity.
+
+---
+
+### Access Token
+
+Purpose:
+
+> **Authorize API access.**
+
+Angular sends it to your .NET API:
+
+```http
+GET /api/orders
+Authorization: Bearer eyJhbGciOi...
+```
+
+The .NET API validates the access token.
+
+---
+
+# 13. Complete flow
+
+Now put everything together:
+
+```text
+┌─────────────────┐
+│ Angular Browser │
+└────────┬────────┘
+         │
+         │ 1. /authorize
+         │ client_id
+         │ scope
+         │ redirect_uri
+         │ code_challenge
+         ▼
+┌─────────────────────┐
+│ Microsoft Entra ID  │
+└─────────┬───────────┘
+          │
+          │ 2. Login + MFA
+          │
+          │
+          │ 3. Authorization Code
+          ▼
+┌─────────────────┐
+│ Angular Callback│
+└────────┬────────┘
+         │
+         │ 4. POST /token
+         │ code
+         │ code_verifier
+         ▼
+┌─────────────────────┐
+│ Microsoft Entra ID  │
+└─────────┬───────────┘
+          │
+          │ 5. ID Token
+          │    Access Token
+          ▼
+┌─────────────────┐
+│ Angular Browser │
+└────────┬────────┘
+         │
+         │ 6. Authorization: Bearer <access_token>
+         ▼
+┌─────────────────┐
+│ .NET Web API    │
+└─────────────────┘
+```
+
+---
+
+# 14. What happens inside .NET API?
+
+Suppose Angular calls:
+
+```http
+GET https://api.company.com/api/orders
+Authorization: Bearer eyJhbGciOiJSUzI1Ni...
+```
+
+Your ASP.NET Core API might have:
+
+```csharp
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApi(
+        builder.Configuration.GetSection("AzureAd"));
+```
+
+Then:
+
+```csharp
+[Authorize]
+[HttpGet("orders")]
+public IActionResult GetOrders()
+{
+    return Ok(...);
+}
+```
+
+The request goes through the authentication middleware:
+
+```text
+HTTP Request
+     │
+     ▼
+Authentication Middleware
+     │
+     ▼
+Validate JWT
+     │
+     ├── Signature
+     ├── Issuer
+     ├── Audience
+     ├── Expiration
+     └── Claims
+     │
+     ▼
+Authorization
+     │
+     ▼
+Controller
+```
+
+---
+
+# 15. How does `.NET` know whether `orders.read` is allowed?
+
+You can authorize based on scopes.
+
+Conceptually:
+
+```csharp
+[Authorize]
+[RequiredScope("orders.read")]
+[HttpGet("orders")]
+public IActionResult GetOrders()
+{
+    ...
+}
+```
+
+Then:
+
+```text
+Access Token
+      │
+      ▼
+scope = orders.read
+      │
+      ▼
+Authorization succeeds
+```
+
+If the token has:
+
+```text
+scope = profile
+```
+
+but not:
+
+```text
+orders.read
+```
+
+then:
+
+```text
+403 Forbidden
+```
+
+---
+
+# 16. Authentication vs Authorization in this flow
+
+This is a very good way to explain it in an interview:
+
+```text
+OIDC
+ │
+ └── Authentication
+       "Who are you?"
+
+OAuth 2.0
+ │
+ └── Authorization
+       "What can you access?"
+```
+
+In our example:
+
+```text
+openid
+   ↓
+Who is the user?
+
+orders.read
+   ↓
+Can this client access Orders API?
+```
+
+---
+
+# 17. Where SSO comes in
+
+Suppose the user is already logged into Microsoft 365:
+
+```text
+Outlook
+Teams
+SharePoint
+```
+
+Then the user opens:
+
+```text
+app.company.com
+```
+
+Angular redirects to Entra ID.
+
+Entra ID already has an authenticated session.
+
+Therefore:
+
+```text
+Angular
+   ↓
+Entra ID
+   ↓
+Existing SSO session
+   ↓
+Authorization Code
+   ↓
+Angular
+```
+
+The user may not have to enter credentials again.
+
+That's **SSO**.
+
+---
+
+# 18. The most important interview distinction
+
+If interviewer asks:
+
+> "Why are we using OIDC instead of OAuth?"
+
+Say:
+
+> **OAuth 2.0 is primarily an authorization framework. OIDC extends OAuth 2.0 to provide authentication and standardized identity information through the ID token. In our Angular + .NET API architecture, OIDC authenticates the user, while the OAuth access token is used to authorize calls to the API.**
+
+And then explain:
+
+```text
+OIDC
+ ↓
+ID Token
+ ↓
+Identity
+
+OAuth 2.0
+ ↓
+Access Token
+ ↓
+API Authorization
+```
+
+---
+
+# 19. Your exact URL — decoded
+
+Your URL:
+
+```text
+GET /authorize?
+    client_id=angular-client
+    &response_type=code
+    &scope=openid profile email orders.read
+    &redirect_uri=https://app.company.com/callback
+    &code_challenge=...
+```
+
+can be remembered as:
+
+```text
+/authorize
+    │
+    ├── client_id
+    │      ↓
+    │   Which application?
+    │
+    ├── response_type=code
+    │      ↓
+    │   Give me authorization code
+    │
+    ├── scope
+    │      ↓
+    │   What identity/API permissions?
+    │
+    ├── redirect_uri
+    │      ↓
+    │   Where should you send the result?
+    │
+    └── code_challenge
+           ↓
+        PKCE protection
+```
+
+### Interview memory flow
+
+> **Angular → `/authorize` → Login/MFA → Authorization Code → `/token` + code_verifier → ID Token + Access Token → Bearer Access Token → .NET API → Validate JWT → Check Scope → Controller.**
+
+That's the complete **real-world OIDC Authorization Code + PKCE flow** you should be able to draw on a whiteboard.
+
