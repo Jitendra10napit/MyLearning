@@ -10,3 +10,7 @@ Nirav@963066
 
 
 https://github.com/pravinmenghani1/Capstone-3-Agentic-Healthcare-Assistant
+
+https://github.com/pravinmenghani1/Capstone-3-Agentic-Healthcare-Assistant/tree/main
+https://github.com/pravinmenghani1/Capstone-2-Banking-Customer-Support-AI-Agent
+https://github.com/awslabs/aidlc-workflows
