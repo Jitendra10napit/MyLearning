@@ -17,3 +17,5 @@ https://github.com/awslabs/aidlc-workflows
 
 
 /aidlc using the file in the current directory "1754386259_capstone_problem_statement_agentic_healthcare_assistant_for_medical_task_automation.pdf" I need you to help me build an agentic healthcare assistant. The details are added in the file.
+
+https://github.com/pravinmenghani1/GenAI-interview-questions
