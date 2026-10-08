@@ -630,6 +630,129 @@ API Rate Limit / 429
    = producer-side backpressure
 ```
 
+
+
+
+
+Those options are used at the **consumer level**, not the producer/API level.
+
+```csharp
+var options = new ServiceBusProcessorOptions
+{
+    MaxConcurrentCalls = 4,
+    PrefetchCount = 20
+};
+
+var processor = client.CreateProcessor(
+    "employee-queue",
+    options);
+```
+
+### Think of the flow
+
+```text
+Producer / API
+     │
+     │ SendMessageAsync()
+     ▼
+┌─────────────────────┐
+│ Azure Service Bus   │
+│       Queue         │
+│                     │
+│ M1 M2 M3 M4 ... M20 │
+└──────────┬──────────┘
+           │
+           │ Consumer
+           ▼
+     ┌───────────────┐
+     │   Processor   │
+     │               │
+     │ MaxConcurrent │
+     │ Calls = 4     │
+     │               │
+     │ Prefetch = 20 │
+     └───────┬───────┘
+             │
+             ▼
+        Downstream DB
+```
+
+### What each option does
+
+**`MaxConcurrentCalls = 4`**
+
+Controls **how many messages the consumer processes concurrently**.
+
+```text
+Queue
+ M1 M2 M3 M4 M5 M6 M7
+ │  │  │  │
+ ▼  ▼  ▼  ▼
+ W1 W2 W3 W4
+
+M5 waits
+M6 waits
+M7 waits
+```
+
+So at most **4 message handlers** are actively processing at the same time.
+
+---
+
+**`PrefetchCount = 20`**
+
+Controls how many messages the consumer can **prefetch/cache locally** so they're ready for processing.
+
+Conceptually:
+
+```text
+Azure Service Bus
+       │
+       │ fetch up to ~20
+       ▼
+Consumer memory
+[M1 M2 M3 ... M20]
+       │
+       │ max 4 at a time
+       ▼
+W1 W2 W3 W4
+```
+
+So `PrefetchCount` is mainly a **consumer-side performance optimization**, while `MaxConcurrentCalls` is a **consumer-side concurrency control**.
+
+### Producer has different controls
+
+At the producer/API level, you'd typically use:
+
+```text
+API
+ │
+ ├── ASP.NET Rate Limiting
+ ├── Maximum request rate
+ ├── Queue capacity/backpressure checks
+ └── 429 Too Many Requests
+       │
+       ▼
+Service Bus Queue
+```
+
+### Easy way to remember
+
+| Setting | Level | Purpose |
+|---|---|---|
+| `MaxConcurrentCalls` | **Consumer** | How many messages process simultaneously |
+| `PrefetchCount` | **Consumer** | How many messages to fetch ahead |
+| API Rate Limiter | **Producer/API** | How fast clients can submit requests |
+| Service Bus queue | **Between them** | Buffer / decouple producer and consumer |
+| `SemaphoreSlim` | **Consumer** | Protect downstream resource |
+| `RateLimiter` | **Consumer** | Control messages/sec |
+
+**Architectural rule:**
+
+> **Producer controls how fast messages enter the system; consumer controls how fast messages leave the queue.**
+
+And if your goal is specifically **"slow down processing because my database can handle only 100 requests/sec"**, put the control primarily on the **consumer side**.
+
 The key concept to remember is:
 
 > **Service Bus doesn't inherently "slow down" your system. It gives you a buffer. The consumer controls how fast messages leave that buffer.**
