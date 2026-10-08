@@ -1,4 +1,5 @@
 ## Saga Pattern — Microservice Architecture
+<img width="844" height="550" alt="image" src="https://github.com/user-attachments/assets/cb7e93b4-936d-46f5-9b6e-f13a5c1e09ca" />
 
 ### Simple definition
 
