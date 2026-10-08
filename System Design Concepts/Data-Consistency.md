@@ -130,7 +130,7 @@ The system may sacrifice some **latency/availability** to provide stronger consi
 
 # 4. Eventual Consistency
 
-With **eventual consistency**, different replicas may temporarily have different values, but they eventually converge.
+With **eventual consistency**, different replicas may temporarily have different values, but they eventually converge/Merge/Synced.
 
 ### Example
 
