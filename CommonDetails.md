@@ -22,3 +22,7 @@ https://github.com/pravinmenghani1/GenAI-interview-questions
 
 
 https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli
+
+
+
+https://github.com/pravinmenghani1/Capstone-2-Banking-Customer-Support-AI-Agent
