@@ -132,6 +132,8 @@ It can run directly or behind infrastructure such as:
 
 Middleware is software in the HTTP request pipeline.
 
+Middleware in ASP.NET Core is a software component in the HTTP request pipeline that can inspect or modify requests and responses, execute additional logic, and either pass control to the next component or terminate the pipeline. Examples include authentication, authorization, logging and exception-handling middleware.
+
 Example:
 
 ```csharp
