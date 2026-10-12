@@ -45,6 +45,16 @@ p2.X = 20;
 - The type is preferably small and immutable.
 
 
+### Class
+
+Share the reference — multiple variables can point to the same object.
+
+
+### Struct
+
+Copy the value — each assignment gets its own value.
+
+
 ---
 
 # 🔥 2. Value type vs Reference type
