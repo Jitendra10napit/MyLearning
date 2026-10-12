@@ -1725,37 +1725,183 @@ Use filters for MVC-specific concerns.
 ---
 
 # 🔥 22. What is global exception handling?
+In ASP.NET Core Web API, global exception handling means handling unexpected errors from one central place instead of writing `try-catch` in every controller or service.
 
-Don't put this everywhere:
+Think of it as a central security desk: whenever something goes wrong, the error is routed through one place that logs it and returns a consistent response.
 
-```csharp
-try
+## 1. Without global exception handling ❌
+
+You might repeat this code in every API:
+
+```
+[HttpGet]
+public IActionResult GetEmployees()
 {
-}
-catch(Exception ex)
-{
+    try
+    {
+        throw new Exception("Database failed");
+    }
+    catch (Exception ex)
+    {
+        return StatusCode(500, ex.Message);
+    }
 }
 ```
 
-Instead use centralized exception handling.
+Problems:
 
-For example:
+- Repeated code in multiple endpoints.
+- Different APIs might return inconsistent errors.
+- Internal exception details could leak to clients.
 
-```csharp
+## 2. With global exception handling ✅
+
+ASP.NET Core provides exception-handling middleware to centralize error handling.
+
+### Step 1: Configure it in `Program.cs`
+
+```
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+
+var app = builder.Build();
+
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+
+        await context.Response.WriteAsJsonAsync(new
+        {
+            message = "An unexpected error occurred."
+        });
+    });
+});
+
+app.MapControllers();
+
+app.Run();
+```
+
+### Step 2: Write a normal controller
+
+```
+[ApiController]
+[Route("api/[controller]")]
+public class EmployeesController : ControllerBase
+{
+    [HttpGet]
+    public IActionResult GetEmployees()
+    {
+        throw new Exception("Database connection failed!");
+    }
+}
+```
+
+### Step 3: Call the API
+
+Request:
+
+```
+GET /api/employees
+```
+
+Response:
+
+```
+{
+  "message": "An unexpected error occurred."
+}
+```
+
+The middleware catches the unhandled exception and returns a consistent response. The controller doesn't need its own `try-catch`.
+
+Note: This simple example demonstrates the concept. In production, also log the exception and return a trace or correlation ID without exposing internal details.
+
+## 3. Production-style approach in modern .NET
+
+You can use `IExceptionHandler` to separate exception-handling logic from `Program.cs`.
+
+```
+using Microsoft.AspNetCore.Diagnostics;
+
+public class GlobalExceptionHandler : IExceptionHandler
+{
+    private readonly ILogger<GlobalExceptionHandler> _logger;
+
+    public GlobalExceptionHandler(
+        ILogger<GlobalExceptionHandler> logger)
+    {
+        _logger = logger;
+    }
+
+    public async ValueTask<bool> TryHandleAsync(
+        HttpContext context,
+        Exception exception,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogError(
+            exception,
+            "An unhandled exception occurred.");
+
+        context.Response.StatusCode =
+            StatusCodes.Status500InternalServerError;
+
+        await context.Response.WriteAsJsonAsync(
+            new { message = "An unexpected error occurred." },
+            cancellationToken);
+
+        return true;
+    }
+}
+```
+
+Register it in `Program.cs`:
+
+```
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
+var app = builder.Build();
+
 app.UseExceptionHandler();
+
+app.MapControllers();
+
+app.Run();
 ```
 
-or an appropriate custom exception-handling middleware.
+This uses the built-in exception-handling infrastructure and makes the handler reusable and testable.
 
-Return consistent errors such as:
+## 4. How does it work?
 
-```json
-{
-  "title": "Order processing failed",
-  "status": 500,
-  "traceId": "..."
-}
-```
+Client sends API request
+
+Exception-handling middleware
+
+Controller / Service / Database
+
+Exception occurs → Middleware handles it
+
+Log error + Return safe HTTP response
+
+## 5. Global exception handling vs exception filter
+
+| Feature                                                  | Middleware / `IExceptionHandler`     | Exception filter                      |
+| -------------------------------------------------------- | ------------------------------------ | ------------------------------------- |
+| Scope                                                    | Broad HTTP pipeline                  | MVC pipeline                          |
+| Handles service exceptions bubbling through the pipeline | Yes, if unhandled                    | Only within its applicable MVC stages |
+| Handles routing or middleware exceptions                 | Can, depending on pipeline placement | No                                    |
+| Recommended for application-wide error handling          | Yes                                  | Not usually                           |
+
+## 6. Senior/Staff Engineer interview answer
+
+“Global exception handling centralizes the handling of unhandled exceptions in ASP.NET Core. I configure exception-handling middleware, often with `IExceptionHandler`, to log errors, return consistent HTTP responses, and avoid exposing internal details. I also use structured logging and correlation IDs for troubleshooting, while mapping known business exceptions to appropriate status codes such as 400, 404, or 409 rather than treating every error as a 500.”
+
+Remember: Global exception handling = one central place to catch unhandled errors, log them, and return consistent responses.
 
 Modern ASP.NET Core supports standardized problem details through `ProblemDetails`.
 
