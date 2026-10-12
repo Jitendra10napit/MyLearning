@@ -1413,6 +1413,149 @@ cache.TryAdd("E1", employee);
 
 They are designed for concurrent access and can be preferable to manually locking ordinary collections in suitable scenarios.
 
+
+<img width="943" height="766" alt="image" src="https://github.com/user-attachments/assets/48242147-447c-4fc6-a297-0aa454dbc86d" />
+
+In C#, these four collections belong to `System.Collections.Concurrent`. They are designed for scenarios where multiple threads access or modify the same collection at the same time.
+
+ 
+
+## 2. Code examples you can remember
+
+All examples use:
+
+```
+using System.Collections.Concurrent;
+```
+
+### A. `ConcurrentDictionary<TKey,TValue>` — Thread-safe key-value storage
+
+Scenario: Multiple API requests access a shared employee cache.
+
+```
+var employees = new ConcurrentDictionary<int, string>();
+
+employees.TryAdd(101, "Rahul");
+employees.TryAdd(102, "Priya");
+
+// Thread-safe update
+employees.AddOrUpdate(101, "Rahul", (key, oldValue) => "Amit");
+
+// Read
+if (employees.TryGetValue(101, out var name))
+{
+    Console.WriteLine(name); // Amit
+}
+```
+
+Why use it?
+
+- Multiple threads can read and update entries safely.
+- `TryAdd()` avoids adding an existing key.
+- `AddOrUpdate()` adds a missing key or updates an existing one.
+
+Senior tip: Prefer `AddOrUpdate()` over separate check-then-update operations when you need an atomic dictionary update. Its update delegate can run more than once, so avoid side effects inside it.
+
+### B. `ConcurrentQueue<T>` — First In, First Out (FIFO)
+
+Scenario: Multiple producers submit work items, and multiple workers retrieve them in queue order.
+
+```
+var jobs = new ConcurrentQueue<string>();
+
+jobs.Enqueue("Job-1");
+jobs.Enqueue("Job-2");
+jobs.Enqueue("Job-3");
+
+if (jobs.TryDequeue(out var job))
+{
+    Console.WriteLine(job); // Job-1
+}
+```
+
+Why use it?
+
+- `Enqueue()` adds an item.
+- `TryDequeue()` safely attempts to remove the next item.
+- It doesn't require manual locking for these individual operations.
+
+Senior tip: This collection is an in-memory queue, not a durable messaging system. For distributed background jobs that must survive restarts, consider Azure Service Bus.
+
+### C. `ConcurrentBag<T>` — Unordered collection
+
+Scenario: Parallel processing of video frames produces results, and each thread adds its result to a shared collection.
+
+```
+var results = new ConcurrentBag<string>();
+
+Parallel.For(1, 4, i =>
+{
+    results.Add($"Frame-{i}");
+});
+
+Console.WriteLine(results.Count); // 3
+```
+
+Why use it?
+
+- Multiple threads can add items safely.
+- Items do not have a guaranteed FIFO or LIFO processing order.
+- It can perform well when threads frequently add and retrieve their own items.
+
+Senior tip: Choose it when order doesn't matter. If you need ordered processing, choose a queue or stack instead.
+
+### D. `ConcurrentStack<T>` — Last In, First Out (LIFO)
+
+Scenario: Multiple threads share pending work where the newest item should be processed first.
+
+```
+var tasks = new ConcurrentStack<string>();
+
+tasks.Push("Task-1");
+tasks.Push("Task-2");
+tasks.Push("Task-3");
+
+if (tasks.TryPop(out var task))
+{
+    Console.WriteLine(task); // Task-3
+}
+```
+
+Why use it?
+
+- `Push()` adds to the top.
+- `TryPop()` removes the newest available item.
+- Multiple threads can push and pop safely.
+
+Senior tip: LIFO can favor recent work, but older items may wait longer if new items keep arriving.
+
+## 3. Quick comparison for interviews
+
+| Collection             | Ordering            | Add         | Remove         |
+| ---------------------- | ------------------- | ----------- | -------------- |
+| `ConcurrentDictionary` | By key              | `TryAdd()`  | `TryRemove()`  |
+| `ConcurrentQueue`      | FIFO                | `Enqueue()` | `TryDequeue()` |
+| `ConcurrentBag`        | No guaranteed order | `Add()`     | `TryTake()`    |
+| `ConcurrentStack`      | LIFO                | `Push()`    | `TryPop()`     |
+
+## 4. Which one would you choose in a real .NET application?
+
+| Requirement                           | Choice                 |
+| ------------------------------------- | ---------------------- |
+| Shared in-memory cache by employee ID | `ConcurrentDictionary` |
+| Process jobs in arrival order         | `ConcurrentQueue`      |
+| Collect parallel processing results   | `ConcurrentBag`        |
+| Process newest pending item first     | `ConcurrentStack`      |
+
+One important architectural distinction: these collections make their individual operations thread-safe, but they do not automatically make a whole multi-step business workflow atomic. For example, checking an inventory count and then decrementing it may require a separate atomic operation or synchronization strategy.
+
+Final memory trick:
+
+- Dictionary → Find by key
+- Queue → Oldest first
+- Bag → Order doesn't matter
+- Stack → Newest first
+
 ---
 
 # 🔥 42. What is `volatile`?
