@@ -1903,6 +1903,112 @@ Log error + Return safe HTTP response
 
 Remember: Global exception handling = one central place to catch unhandled errors, log them, and return consistent responses.
 
+The key idea is: Use an exception filter when your error-handling logic needs information about the MVC controller or action that failed.
+
+For example, you might want to log which controller action failed, or return a controller-specific error response. For general application-wide exception handling, middleware is usually a better choice.
+
+## Example: Return a controller-specific error response
+
+Imagine your Employee API needs to return a consistent error message containing the controller and action name whenever an unhandled exception occurs.
+
+### 1. Create an exception filter
+
+```
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+
+public class ApiExceptionFilter : IExceptionFilter
+{
+    private readonly ILogger<ApiExceptionFilter> _logger;
+
+    public ApiExceptionFilter(ILogger<ApiExceptionFilter> logger)
+    {
+        _logger = logger;
+    }
+
+    public void OnException(ExceptionContext context)
+    {
+        // MVC-specific information
+        var controller = context.RouteData.Values["controller"]?.ToString();
+        var action = context.RouteData.Values["action"]?.ToString();
+
+        _logger.LogError(
+            context.Exception,
+            "Error in {Controller}.{Action}",
+            controller,
+            action);
+
+        context.Result = new ObjectResult(new
+        {
+            message = "Employee operation failed.",
+            controller,
+            action
+        })
+        {
+            StatusCode = StatusCodes.Status500InternalServerError
+        };
+
+        context.ExceptionHandled = true;
+    }
+}
+```
+
+### 2. Apply it only to the Employees controller
+
+```
+[ApiController]
+[Route("api/[controller]")]
+[ServiceFilter(typeof(ApiExceptionFilter))]
+public class EmployeesController : ControllerBase
+{
+    [HttpGet("{id:int}")]
+    public IActionResult GetEmployee(int id)
+    {
+        throw new InvalidOperationException("Employee lookup failed");
+    }
+}
+```
+
+Register the filter:
+
+```
+builder.Services.AddScoped<ApiExceptionFilter>();
+builder.Services.AddControllers();
+```
+
+### 3. Call the API
+
+Request:
+
+```
+GET /api/employees/10
+```
+
+Response:
+
+```
+{
+  "message": "Employee operation failed.",
+  "controller": "Employees",
+  "action": "GetEmployee"
+}
+```
+
+The filter can access MVC-specific information through `ExceptionContext`, such as the route data, action descriptor, and exception.
+
+## Why use a filter here instead of middleware?
+
+| Requirement                                              | Better fit           |
+| -------------------------------------------------------- | -------------------- |
+| Handle an exception using controller/action metadata     | Exception filter     |
+| Apply custom handling only to selected controllers       | Exception filter     |
+| Handle unhandled exceptions throughout the HTTP pipeline | Exception middleware |
+| Log all incoming HTTP requests                           | Middleware           |
+
+Staff Engineer tip: Don't expose controller names or internal exception details in production responses unless there is a clear API contract requiring them. In a real application, log the context internally and return a safe error response with a correlation ID.
+
+Interview answer: “I use exception filters when error handling depends on MVC-specific context, such as controller/action metadata or controller-specific response behavior. For centralized application-wide exception handling, I prefer exception-handling middleware.”
+
 Modern ASP.NET Core supports standardized problem details through `ProblemDetails`.
 
 ---
