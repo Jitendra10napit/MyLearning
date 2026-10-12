@@ -170,6 +170,149 @@ It generates a database query.
 
 > "For primary-key lookup, I prefer Find/FindAsync because EF Core first checks the change tracker before querying the database."
 
+
+# EF Core: `Find()` vs `FirstOrDefault()`
+
+The main difference is:
+
+- `Find()` searches for an entity using its primary key. It first checks whether the entity is already tracked by the current `DbContext`; if not, it queries the database.
+- `FirstOrDefault()` searches using a condition you specify. It executes the query against the database when you enumerate or materialize it, and returns the first matching record or `null`.
+
+Let's understand with an Employee table.
+
+## 1. Example Employee table
+
+| Id (Primary Key) | Name  | Department |
+| ---------------- | ----- | ---------- |
+| 1                | Amit  | IT         |
+| 2                | Priya | HR         |
+| 3                | Rahul | IT         |
+
+## 2. Using `FindAsync()` — search by primary key
+
+```
+var employee = await _context.Employees
+    .FindAsync(2);
+
+Console.WriteLine(employee?.Name);
+```
+
+Output:
+
+```
+Priya
+```
+
+How it works:
+
+1. EF Core checks whether employee ID `2` is already tracked in the current `DbContext`.
+2. If found and not marked as deleted, it returns that tracked entity without querying the database.
+3. Otherwise, it queries the database using the primary key.
+
+Conceptually, the database query is:
+
+```
+SELECT *
+FROM Employees
+WHERE Id = 2;
+```
+
+Use `FindAsync()` when you need an entity by its primary key.
+
+## 3. Using `FirstOrDefaultAsync()` — search by any condition
+
+```
+var employee = await _context.Employees
+    .FirstOrDefaultAsync(e => e.Department == "IT");
+
+Console.WriteLine(employee?.Name);
+```
+
+Output:
+
+```
+Amit
+```
+
+Because multiple employees belong to IT, `FirstOrDefaultAsync()` returns the first matching record according to the query's ordering. Without an explicit `OrderBy`, you should not rely on which matching record is returned.
+
+Conceptually:
+
+```
+SELECT TOP(1) *
+FROM Employees
+WHERE Department = 'IT';
+```
+
+Use `FirstOrDefaultAsync()` when searching by a business condition, such as department, email, status, or a combination of fields.
+
+## 4. Side-by-side comparison
+
+| Feature                       | `FindAsync()`                           | `FirstOrDefaultAsync()`                     |
+| ----------------------------- | --------------------------------------- | ------------------------------------------- |
+| Search criteria               | Primary key only                        | Any translatable condition                  |
+| Checks tracked entities first | Yes                                     | No equivalent primary-key lookup shortcut   |
+| Can avoid a database query    | Yes, if the entity is already tracked   | Normally queries the database when executed |
+| Returns                       | Entity or `null`                        | First matching entity or `null`             |
+| Multiple matching records     | Not applicable for a unique primary key | Returns one matching record                 |
+| Ordering                      | Not applicable                          | Use `OrderBy()` if the choice matters       |
+
+## 5. Important real-world example: Why tracking matters
+
+```
+var employee1 = await _context.Employees.FindAsync(1);
+
+// Change the tracked entity
+employee1!.Name = "Amit Sharma";
+
+// FindAsync can return the same tracked instance
+var employee2 = await _context.Employees.FindAsync(1);
+
+Console.WriteLine(ReferenceEquals(employee1, employee2));
+// True
+```
+
+Now compare:
+
+```
+var employee = await _context.Employees
+    .FirstOrDefaultAsync(e => e.Id == 1);
+```
+
+`FirstOrDefaultAsync()` executes a database query rather than using `FindAsync()`'s primary-key shortcut. However, with tracking enabled, EF Core can return the already tracked instance through identity resolution. It does not necessarily overwrite its current property values with the database values.
+
+If you specifically need to reload database values into a tracked entity, use `ReloadAsync()`.
+
+## 6. What if no record exists?
+
+Both return `null` when no matching entity exists.
+
+```
+var employee = await _context.Employees.FindAsync(999);
+
+if (employee is null)
+{
+    return NotFound();
+}
+```
+
+Similarly:
+
+```
+var employee = await _context.Employees
+    .FirstOrDefaultAsync(e => e.Email == "unknown@example.com");
+
+if (employee is null)
+{
+    return NotFound();
+}
+```
+
+## 7. Senior-level interview answer
+
+"`FindAsync()` is optimized for primary-key lookups because it checks the DbContext's change tracker before querying the database. `FirstOrDefaultAsync()` supports arbitrary predicates and executes a query when the result is requested. I use `FindAsync()` for retrieving an entity by its primary key and `FirstOrDefaultAsync()` for business-condition queries. If I only need read-only data, I may use `AsNoTracking()` with `FirstOrDefaultAsync()`."
+
+Remember: Primary key lookup → `FindAsync()`. Business-condition lookup → `FirstOrDefaultAsync()`.
 ---
 
 # 7. IQueryable vs IEnumerable
