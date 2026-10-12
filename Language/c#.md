@@ -34,6 +34,16 @@ p2.X = 20;
 
 > "Classes are reference types and are generally suitable for entities with identity and mutable state. Structs are value types and can be useful for small, logically value-like data, but I avoid large mutable structs because copying them can be expensive and confusing."
 
+**Use a class when:**
+- You need a complex object such as Employee, Order or Customer.
+- Multiple parts of your application need to refer to the same object.
+- You need inheritance or polymorphism.
+**Use a struct when:**
+- You represent a small value, such as a point, coordinate or measurement.
+- Copying the value should create an independent value.
+- The type is preferably small and immutable.
+
+
 ---
 
 # 🔥 2. Value type vs Reference type
