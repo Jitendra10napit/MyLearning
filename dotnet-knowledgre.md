@@ -2624,6 +2624,216 @@ public class OrderClient
 }
 ```
 
+# What is `IHttpClientFactory` in .NET?
+
+`IHttpClientFactory` is a built-in .NET feature used to create and manage `HttpClient` instances safely and efficiently when your application calls external APIs or other microservices.
+
+For example, your Employee API might call:
+
+- A Payment API
+- An Authentication API
+- A third-party notification service
+
+Instead of creating and managing `HttpClient` manually, you can use `IHttpClientFactory` to manage the underlying HTTP handlers, configure clients, and integrate logging and resilience policies.
+
+## 1. Why do we need `IHttpClientFactory`?
+
+Consider this code:
+
+```
+public async Task<string> GetEmployeesAsync()
+{
+    using var client = new HttpClient();
+
+    return await client.GetStringAsync(
+        "https://example.com/api/employees");
+}
+```
+
+Creating and disposing an `HttpClient` for every request is generally not recommended. It can cause excessive connection creation and contribute to socket exhaustion under high traffic.
+
+Keeping one `HttpClient` forever can also be problematic if its underlying connection pool doesn't refresh appropriately, potentially leaving it using stale DNS information.
+
+`IHttpClientFactory` addresses these lifecycle issues by creating `HttpClient` instances while pooling and managing their underlying handlers.
+
+## 2. Complete example: Employee API calling an external API
+
+Suppose your Employee API needs to retrieve employee information from another service. We will use `IHttpClientFactory` through a typed client, which is a clean approach for production applications.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://learn.microsoft.com\&sz=32)
+
+Microsoft Learn
+
++1
+
+
+
+### Step 1: Register the HTTP client in `Program.cs`
+
+```
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+
+builder.Services.AddHttpClient<EmployeeApiClient>(client =>
+{
+    client.BaseAddress =
+        new Uri("https://jsonplaceholder.typicode.com/");
+
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+
+var app = builder.Build();
+
+app.MapControllers();
+
+app.Run();
+```
+
+`AddHttpClient<EmployeeApiClient>()` registers the typed client and configures the underlying `HttpClient`.
+
+### Step 2: Create the model
+
+```
+public class Employee
+{
+    public int Id { get; set; }
+
+    public string? Name { get; set; }
+
+    public string? Email { get; set; }
+}
+```
+
+### Step 3: Create a typed HTTP client
+
+```
+using System.Net.Http.Json;
+
+public class EmployeeApiClient
+{
+    private readonly HttpClient _httpClient;
+
+    public EmployeeApiClient(HttpClient httpClient)
+    {
+        _httpClient = httpClient;
+    }
+
+    public async Task<Employee?> GetEmployeeAsync(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        return await _httpClient.GetFromJsonAsync<Employee>(
+            $"users/{id}",
+            cancellationToken);
+    }
+}
+```
+
+Here, `HttpClient` is injected by dependency injection. You don't manually instantiate it with `new HttpClient()`.
+
+### Step 4: Call the client from a controller
+
+```
+[ApiController]
+[Route("api/employees")]
+public class EmployeesController : ControllerBase
+{
+    private readonly EmployeeApiClient _client;
+
+    public EmployeesController(EmployeeApiClient client)
+    {
+        _client = client;
+    }
+
+    [HttpGet("{id:int}")]
+    public async Task<IActionResult> GetEmployee(
+        int id,
+        CancellationToken cancellationToken)
+    {
+        var employee = await _client.GetEmployeeAsync(
+            id, cancellationToken);
+
+        if (employee is null)
+            return NotFound();
+
+        return Ok(employee);
+    }
+}
+```
+
+Run the application and call:
+
+```
+GET /api/employees/1
+```
+
+The request flows like this:
+
+Client → EmployeesController
+
+EmployeeApiClient
+
+HttpClient managed through IHttpClientFactory
+
+External API → JSON response
+
+The URL is formed by combining the configured base address with `users/1`. The response JSON is deserialized into the `Employee` model.
+
+## 3. Three ways to use `IHttpClientFactory`
+
+| Approach     | Example                    | When to use                                 |
+| ------------ | -------------------------- | ------------------------------------------- |
+| Basic client | `CreateClient()`           | Simple HTTP calls                           |
+| Named client | `CreateClient("Payments")` | Multiple APIs with different configurations |
+| Typed client | Inject `EmployeeApiClient` | Organized, testable application services    |
+
+For example, named clients let you configure separate endpoints:
+
+```
+builder.Services.AddHttpClient("Payments", client =>
+{
+    client.BaseAddress = new Uri("https://payments.example.com/");
+});
+
+builder.Services.AddHttpClient("Notifications", client =>
+{
+    client.BaseAddress = new Uri("https://notifications.example.com/");
+});
+```
+
+You can then inject `IHttpClientFactory` and call `CreateClient("Payments")` or `CreateClient("Notifications")` as needed.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://learn.microsoft.com\&sz=32)
+
+Microsoft Learn
+
++1
+
+
+
+## 4. What happens internally?
+
+1. Create: The factory creates a new `HttpClient` when requested.
+2. Reuse: It pools and reuses underlying `HttpMessageHandler` instances, which manage connection pools.
+3. Refresh: When a handler's configured lifetime expires, the factory can replace it for newly created clients. This helps the application respond to DNS changes.
+4. Observe: Factory-created clients support configurable logging and can be configured with delegating handlers for cross-cutting concerns such as authentication and resilience.
+
+[image](https://www.google.com/s2/favicons?domain=https://learn.microsoft.com\&sz=32)
+
+Microsoft Learn
+
++1
+
+Note that the default handler lifetime is two minutes. This is the lifetime of the pooled handler, not a timeout for an individual HTTP request. Request timeout is configured separately using `HttpClient.Timeout`.
+
+## 5. Senior-level interview answer
+
+“`IHttpClientFactory` is a .NET facility for creating configured `HttpClient` instances. It manages the lifecycle of underlying HTTP handlers, helps avoid connection exhaustion caused by repeatedly creating independent handler pools, and supports logging, dependency injection, and resilience handlers. I generally prefer typed clients when integrating with specific microservices because they encapsulate the external API communication and are easier to test.”
+
+One additional point: `IHttpClientFactory` does not automatically retry every failed request. For retries, circuit breakers, and timeouts beyond the basic client timeout, configure an appropriate resilience pipeline.
+
+
 ---
 
 # 🔥 35. What is retry and why can retry be dangerous?
