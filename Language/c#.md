@@ -1822,6 +1822,108 @@ Memory<byte>
 
 may be appropriate.
 
+In C#, remember these three concepts like this:
+
+- `Span<T>` = Work with a part of data without copying it.
+- `Memory<T>` = Similar to `Span<T>`, but can be stored and used across `await`.
+- `Span` = There is no separate non-generic `Span` type in standard C#; usually people mean `Span<T>`.
+
+## 1. Real-life example
+
+Imagine you have an array of 5 numbers:
+
+`[10, 20, 30, 40, 50]`
+
+You want to work only with `20, 30, 40`.
+
+`Span<T>` — A window into the data
+
+### 10
+
+### 20
+
+### 30
+
+### 40
+
+### 50
+
+Selects part of the original array without creating a new array.
+
+`Memory<T>` — A window you can keep
+
+It can represent the same portion of the array, and you can store it in a field or use it in async workflows.
+
+Unlike `Span<T>`, it can be kept across an `await` by storing it in an ordinary variable.
+
+## 2. `Span<T>` example
+
+```
+int[] numbers = { 10, 20, 30, 40, 50 };
+
+Span<int> span = numbers.AsSpan(1, 3);
+
+span[0] = 99;
+
+Console.WriteLine(numbers[1]); // 99
+```
+
+What happened?
+
+- `AsSpan(1, 3)` selects three elements starting at index `1`.
+- No new array is created.
+- Changing `span[0]` changes the original array's second element.
+
+Remember: Span = temporary view into data.
+
+## 3. `Memory<T>` example
+
+```
+int[] numbers = { 10, 20, 30, 40, 50 };
+
+Memory<int> memory = numbers.AsMemory(1, 3);
+
+memory.Span[0] = 99;
+
+Console.WriteLine(numbers[1]); // 99
+```
+
+It behaves similarly, but `Memory<T>` can be stored in objects and used in asynchronous code.
+
+```
+static async Task ProcessAsync(Memory<int> memory)
+{
+    await Task.Delay(100);
+
+    memory.Span[0] = 99;
+}
+```
+
+This works because the `Memory<int>` value can survive across `await`. The method accesses its `Span` only after the await completes.
+
+## 4. Quick comparison
+
+| Feature                                        | `Span<T>`                   | `Memory<T>`                        |
+| ---------------------------------------------- | --------------------------- | ---------------------------------- |
+| Represents                                     | A view of data              | A view of data                     |
+| Copies data?                                   | No                          | No                                 |
+| Can modify underlying data?                    | Yes, if writable            | Yes, if writable                   |
+| Can be stored in a class field?                | No                          | Yes                                |
+| Can remain in a local variable across `await`? | No                          | Yes                                |
+| Common use                                     | Fast synchronous processing | Async workflows and stored buffers |
+
+Both can refer to arrays, slices, and other supported memory sources. Neither automatically makes shared data thread-safe.
+
+## 5. Real-world .NET use cases
+
+- `Span<T>`: Parsing strings, processing byte buffers, video/image data, reducing allocations.
+- `Memory<T>`: Async file I/O, network buffers, and APIs that need to retain a buffer across asynchronous operations.
+
+Interview memory trick: `Span<T>` = use now. `Memory<T>` = can keep for later.
+
+One important detail: `Span<T>` is a `ref struct`, so it cannot be stored in ordinary class fields or kept in a local variable across an `await`. Modern C# has some advanced exceptions for ref structs in async methods, but `Memory<T>` remains the straightforward choice for async buffer handling.
+
+
 ---
 
 # 🔥 51. What are generics?
