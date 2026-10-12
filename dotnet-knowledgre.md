@@ -344,6 +344,171 @@ if `MyService` directly depends on `MyDbContext`.
 
 At Staff level, explain **lifetime mismatch**, not merely "this gives an error."
 
+
+# What is a Captive Dependency in .NET?
+
+A captive dependency occurs when a service with a longer lifetime holds a reference to a service with a shorter lifetime than itself.
+
+In ASP.NET Core Dependency Injection, the most common example is a Singleton service depending on a Scoped service.
+
+Let's understand this with a simple example.
+
+## 1. First, understand service lifetimes
+
+| Lifetime    | Meaning                                                       | Example                |
+| ----------- | ------------------------------------------------------------- | ---------------------- |
+| `Transient` | A new instance is created each time the service is requested. | A lightweight helper   |
+| `Scoped`    | One instance per DI scope, usually one HTTP request.          | `DbContext`            |
+| `Singleton` | One instance for the lifetime of the application.             | Application-wide cache |
+
+## 2. Real-world example
+
+Imagine a Singleton `ReportService` that depends on a Scoped `EmployeeService`.
+
+ReportService — Singleton
+
+One instance for the entire application
+
+EmployeeService — Scoped
+
+Expected to have one instance per request scope
+
+Problem: the Singleton holds onto the Scoped instance.
+
+The `ReportService` lives for the whole application, so its `EmployeeService` reference may also remain alive for the whole application instead of being created separately for each request.
+
+This is called a captive dependency.
+
+## 3. Code example: Incorrect implementation
+
+```
+builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddSingleton<ReportService>();
+```
+
+The services:
+
+```
+public class EmployeeService
+{
+    public Guid Id { get; } = Guid.NewGuid();
+
+    public string GetEmployees()
+    {
+        return $"EmployeeService ID: {Id}";
+    }
+}
+
+public class ReportService
+{
+    private readonly EmployeeService _employeeService;
+
+    public ReportService(EmployeeService employeeService)
+    {
+        _employeeService = employeeService;
+    }
+
+    public string GenerateReport()
+    {
+        return _employeeService.GetEmployees();
+    }
+}
+```
+
+What's wrong?
+
+- `ReportService` is created once.
+- It receives an `EmployeeService` instance when constructed.
+- That reference remains stored in the Singleton.
+- Subsequent requests may reuse the same `EmployeeService` instance instead of getting the instance appropriate to each request scope.
+
+Important: With scope validation enabled, ASP.NET Core will normally detect this invalid dependency relationship and throw an exception rather than allow it.
+
+## 4. Why is a captive dependency dangerous?
+
+Three common problems are:
+
+1. Incorrect state sharing: Request-specific data may unintentionally be shared across requests.
+2. Thread-safety issues: Multiple requests can access the same service concurrently.
+3. Resource and data problems: If the Scoped service uses an EF Core `DbContext`, it can lead to concurrency issues and incorrect database operations.
+
+This is especially important when using Entity Framework Core because `DbContext` is normally registered as Scoped.
+
+## 5. How to fix it
+
+### Option 1: Make both services Scoped
+
+If `ReportService` does not need to be a Singleton, use the same lifetime.
+
+```
+builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddScoped<ReportService>();
+```
+
+Now both services can be created within each request scope.
+
+### Option 2: Use `IServiceScopeFactory`
+
+If `ReportService` genuinely needs to be a Singleton, create a new scope when you need the Scoped service.
+
+```
+public class ReportService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public ReportService(IServiceScopeFactory scopeFactory)
+    {
+        _scopeFactory = scopeFactory;
+    }
+
+    public async Task<string> GenerateReportAsync()
+    {
+        using var scope = _scopeFactory.CreateScope();
+
+        var employeeService =
+            scope.ServiceProvider
+                 .GetRequiredService<EmployeeService>();
+
+        return employeeService.GetEmployees();
+    }
+}
+```
+
+Register the services:
+
+```
+builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddSingleton<ReportService>();
+```
+
+Each call creates a new scope and resolves an `EmployeeService` within it. The scope is disposed when the method finishes.
+
+For asynchronous cleanup, use `CreateAsyncScope()` and `await using` when appropriate.
+
+## 6. Interview question: Can a Scoped service depend on a Singleton?
+
+Yes. This is normally valid because the Singleton lives longer than the Scoped service.
+
+For example:
+
+```
+builder.Services.AddSingleton<AppCache>();
+builder.Services.AddScoped<EmployeeService>();
+```
+
+If `EmployeeService` depends on `AppCache`, the dependency direction is safe from a lifetime perspective. However, the Singleton must still be thread-safe if multiple requests access it concurrently.
+
+### Remember this rule
+
+| Dependency relationship | Valid?                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| Singleton → Transient   | Generally valid, but the transient instance is retained if stored in a field |
+| Singleton → Scoped      | Captive dependency — avoid direct injection                                  |
+| Scoped → Singleton      | Generally valid                                                              |
+| Scoped → Transient      | Generally valid                                                              |
+| Transient → Scoped      | Valid when resolved within a scope                                           |
+
+Best interview answer: “A captive dependency occurs when a longer-lived service captures a shorter-lived dependency. For example, a Singleton depending directly on a Scoped service can cause request-specific state to be shared across requests. I would fix it by aligning service lifetimes or creating an explicit DI scope using `IServiceScopeFactory` when a Singleton genuinely needs a Scoped service.”
 ---
 
 # 🔥 11. What is configuration in ASP.NET Core?
