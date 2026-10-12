@@ -117,6 +117,150 @@ void Print(in LargeStruct value)
 
 Useful when you want to avoid copying a potentially large value type while preventing modification through that parameter.
 
+
+In C#, the easiest way to remember `ref`, `out`, and `in` is to understand how a method receives a variable and whether it can read or change it.
+
+## Understand with C# code
+
+### A. `ref` — Read and modify
+
+```
+static void UpdateSalary(ref int salary)
+{
+    salary = salary + 5000;
+}
+
+int salary = 50000;
+
+UpdateSalary(ref salary);
+
+Console.WriteLine(salary); // 55000
+```
+
+What happened?
+
+- The variable must be initialized before calling the method.
+- The method receives it by reference.
+- Changes made inside the method affect the original variable.
+- You must use `ref` both in the method declaration and the method call.
+
+Remember: `ref` = Existing value, can modify it.
+
+### B. `out` — Must provide a value
+
+```
+static void GetSalary(out int salary)
+{
+    salary = 60000;
+}
+
+GetSalary(out int salary);
+
+Console.WriteLine(salary); // 60000
+```
+
+What happened?
+
+- You don't need to initialize `salary` before this call.
+- The method must assign a value to `salary` before it returns.
+- The assigned value is available to the caller.
+
+A practical example is `int.TryParse()`:
+
+```
+string input = "123";
+
+bool success = int.TryParse(input, out int number);
+
+Console.WriteLine(success); // True
+Console.WriteLine(number);  // 123
+```
+
+`TryParse()` returns whether conversion succeeded and uses `out` to provide the converted number.
+
+Remember: `out` = Method must fill the variable.
+
+### C. `in` — Read only
+
+```
+static void PrintSalary(in int salary)
+{
+    Console.WriteLine(salary);
+
+    // salary = 60000; // Compilation error
+}
+
+int salary = 50000;
+
+PrintSalary(in salary);
+```
+
+What happened?
+
+- The variable must be initialized before calling the method.
+- The method can read the value.
+- The method cannot assign a new value to the parameter.
+- Using `in` at the call site is permitted but often optional.
+
+Remember: `in` = Read, don't assign a new value.
+
+## 3. `ref` vs `out` vs `in` — interview table
+
+| Feature                              | `ref`                 | `out`                              | `in`                        |
+| ------------------------------------ | --------------------- | ---------------------------------- | --------------------------- |
+| Purpose                              | Read and modify       | Return a value through a parameter | Read-only parameter         |
+| Must initialize before call?         | Yes                   | No                                 | Yes                         |
+| Must assign inside method?           | No                    | Yes                                | No                          |
+| Can assign a new value to parameter? | Yes                   | Yes                                | No                          |
+| Keyword at call site                 | Required              | Required                           | Optional                    |
+| Common use                           | Update existing value | Return additional result           | Avoid copying large structs |
+
+## 4. Real-world example using all three
+
+Imagine an employee salary calculation.
+
+```
+static void CalculateSalary(
+    ref decimal salary,
+    out decimal bonus,
+    in decimal taxRate)
+{
+    salary += 5000;          // Modify existing salary
+    bonus = salary * 0.10m;  // Provide a bonus
+    Console.WriteLine(taxRate); // Read tax rate
+}
+
+decimal salary = 50000;
+decimal taxRate = 0.05m;
+
+CalculateSalary(ref salary, out decimal bonus, in taxRate);
+
+Console.WriteLine(salary); // 55000
+Console.WriteLine(bonus);  // 5500
+```
+
+Here:
+
+- `ref salary`: Updates the existing salary.
+- `out bonus`: Calculates and returns a bonus through the parameter.
+- `in taxRate`: Reads the tax rate without allowing assignment to the parameter.
+
+## 6. The 5-second memory trick
+
+## `ref`
+
+Read + Write — value already exists.
+
+## `out`
+
+Output — method must assign a value.
+
+## `in`
+
+Input — read-only parameter.
+
+Senior-level tip: `in` is particularly useful for large readonly structs because it can avoid copying the entire struct when passing it to a method. Don't assume it always improves performance; for small values, the difference may be negligible.
+
 ---
 
 # 🔥 4. `const` vs `readonly` vs `static readonly`
@@ -149,6 +293,19 @@ One value associated with the type:
 ```csharp
 public static readonly string Version = "1.0";
 ```
+
+
+const = Value fixed at compile time.
+
+
+
+readonly = Value assigned at declaration or in the instance constructor.
+
+
+
+static readonly = One shared value for the class, assigned at declaration or in the static constructor.
+
+
 
 ### Interview trap
 
@@ -290,6 +447,17 @@ public class Account
 ```
 
 The class controls how its state changes.
+
+In C#, Encapsulation means hiding internal data and allowing access through controlled methods or properties.
+
+Think of it as protecting data from being changed incorrectly.
+
+## Interview answer
+
+“Encapsulation is an object-oriented programming principle that combines data and the methods that operate on it into a single unit, while restricting direct access to internal data. In C#, we achieve it using access modifiers such as `private` and controlled access through methods or properties. For example, a bank account keeps its balance private and allows deposits through a method that validates the amount.”
+
+Remember: Encapsulation = Data hiding + Controlled access.
+
 
 ---
 
