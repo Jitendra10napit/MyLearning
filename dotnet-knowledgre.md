@@ -1076,32 +1076,179 @@ Memory trick: Controllers = class-based endpoint organization. Minimal APIs = ro
 ---
 
 # 🔥 16. What is model binding?
+In ASP.NET Core Web API, Model Binding is the process of taking data from an HTTP request and automatically putting it into C# parameters or objects.
 
-ASP.NET Core maps HTTP request data to action parameters/models.
+Remember: Request data → C# variables or model objects.
 
-For example:
+## 1. Real-life example
 
-```http
-GET /orders/100
+Imagine your Angular application sends employee details to your .NET API:
+
 ```
-
-```csharp
-[HttpGet("{id}")]
-public IActionResult Get(int id)
 {
+  "name": "Rahul",
+  "age": 30
 }
 ```
 
-`100` is bound to `id`.
+Model binding helps ASP.NET Core convert this incoming data into a C# object so your API can process it.
 
-It can bind from:
+## 2. Example 1: Model binding from the URL
 
-* route
-* query string
-* headers
-* body
-* form data
+Request:
 
+```
+GET /api/employees/101
+```
+
+Controller:
+
+```
+[HttpGet("{id}")]
+public IActionResult GetEmployee(int id)
+{
+    return Ok($"Employee ID: {id}");
+}
+```
+
+Output:
+
+```
+Employee ID: 101
+```
+
+ASP.NET Core automatically binds `101` from the URL to the `id` parameter.
+
+## 3. Example 2: Model binding from the query string
+
+Request:
+
+```
+GET /api/employees?department=IT
+```
+
+Controller:
+
+```
+[HttpGet]
+public IActionResult GetEmployees(string department)
+{
+    return Ok($"Department: {department}");
+}
+```
+
+Output:
+
+```
+Department: IT
+```
+
+The query-string value `IT` is bound to the `department` parameter.
+
+## 4. Example 3: Model binding from the request body
+
+Create a model:
+
+```
+public class Employee
+{
+    public string Name { get; set; } = "";
+    public int Age { get; set; }
+}
+```
+
+Controller:
+
+```
+[HttpPost]
+public IActionResult CreateEmployee([FromBody] Employee employee)
+{
+    return Ok($"Created: {employee.Name}, Age: {employee.Age}");
+}
+```
+
+Request body:
+
+```
+{
+  "name": "Rahul",
+  "age": 30
+}
+```
+
+Output:
+
+```
+Created: Rahul, Age: 30
+```
+
+ASP.NET Core uses an input formatter, typically the JSON formatter, to deserialize the JSON body into the `Employee` object. In a controller marked with `[ApiController]`, complex parameters are generally inferred as coming from the request body.
+
+## 5. Where does model binding get data?
+
+| Attribute      | Data source                        | Example              |
+| -------------- | ---------------------------------- | -------------------- |
+| `[FromRoute]`  | URL path                           | `/employees/101`     |
+| `[FromQuery]`  | Query string                       | `?department=IT`     |
+| `[FromBody]`   | Request body                       | JSON employee object |
+| `[FromHeader]` | HTTP headers                       | `X-Correlation-ID`   |
+| `[FromForm]`   | Form fields or multipart form data | File upload          |
+
+Example using explicit attributes:
+
+```
+[HttpGet("{id}")]
+public IActionResult GetEmployee(
+    [FromRoute] int id,
+    [FromQuery] string department)
+{
+    return Ok(new { id, department });
+}
+```
+
+Request:
+
+```
+GET /api/employees/101?department=IT
+```
+
+Output:
+
+```
+{
+  "id": 101,
+  "department": "IT"
+}
+```
+
+## 6. Model binding vs model validation
+
+These concepts work together but are different.
+
+- Model binding: Reads and converts request data into C# values.
+- Model validation: Checks whether those values satisfy validation rules.
+
+For example:
+
+```
+public class Employee
+{
+    [Required]
+    public string Name { get; set; } = "";
+
+    [Range(18, 65)]
+    public int Age { get; set; }
+}
+```
+
+Here, model binding populates `Name` and `Age`. Validation checks whether `Name` is supplied and `Age` is between 18 and 65. With `[ApiController]`, invalid model state normally produces an automatic HTTP `400 Bad Request` response.
+
+## Interview answer
+
+“Model binding in ASP.NET Core automatically maps values from an HTTP request—such as route parameters, query strings, headers, forms, and request bodies—to action parameters or model objects. It reduces manual parsing and works with model validation to help ensure incoming data is valid.”
+
+Memory trick: Model binding = Get request data into C# objects. Model validation = Check whether that data is valid.
+ 
 ---
 
 # 🔥 17. What is model validation?
