@@ -2290,6 +2290,186 @@ Solutions include:
 
 A local `SemaphoreSlim` only coordinates callers within **one application instance**. In a multi-instance deployment, you may need distributed coordination or a design that avoids requiring a distributed lock.
 
+
+
+# Cache Stampede in .NET — Problem and Solutions
+
+A cache stampede occurs when a cached item expires or is missing, and many requests try to load the same data from the database simultaneously.
+
+It can overload your database and slow down the API.
+
+## 1. How does a cache stampede happen?
+
+Suppose your ASP.NET Core API caches employee data for 5 minutes.
+
+Cache expires
+
+Employee data is no longer available in cache
+
+100 requests arrive simultaneously
+
+Request 1
+
+Queries DB
+
+Request 2
+
+Queries DB
+
+Requests 3–100
+
+Query DB
+
+Potentially 100 database queries for the same data!
+
+Important: `IMemoryCache.GetOrCreateAsync()` does not guarantee that only one request executes the cache factory during a cache miss.
+
+## 2. Techniques to solve cache stampede
+
+| Technique                    | How it works                                                                   | Best use case                                   |
+| ---------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------- |
+| 1. Locking / Single-flight   | Only one request loads missing data; others wait                               | `IMemoryCache` in a single application instance |
+| 2. HybridCache               | Coordinates concurrent cache misses and supports local and distributed caching | Modern .NET applications                        |
+| 3. Distributed cache (Redis) | Shares cached data across multiple application instances                       | Load-balanced applications                      |
+| 4. Stale-while-revalidate    | Serves older data while refreshing it in the background                        | Data that can tolerate brief staleness          |
+| 5. Background refresh        | Refreshes cache before it expires                                              | Frequently accessed data                        |
+| 6. TTL jitter                | Adds random variation to expiration times                                      | Many cache keys expiring together               |
+
+Redis alone does not prevent stampedes: multiple instances can still miss the same key and query the database concurrently. Combine it with coordination or a single-flight mechanism when needed.
+
+## 3. Solution 1: Use `SemaphoreSlim` with `IMemoryCache`
+
+This is a practical interview example for a single application instance.
+
+```
+public class EmployeeService
+{
+    private readonly IMemoryCache _cache;
+    private readonly AppDbContext _db;
+
+    private static readonly SemaphoreSlim _lock = new(1, 1);
+
+    public EmployeeService(
+        IMemoryCache cache,
+        AppDbContext db)
+    {
+        _cache = cache;
+        _db = db;
+    }
+
+    public async Task<List<Employee>> GetEmployeesAsync()
+    {
+        const string key = "employees";
+
+        // First cache check
+        if (_cache.TryGetValue(key, out List<Employee>? employees))
+            return employees!;
+
+        await _lock.WaitAsync();
+
+        try
+        {
+            // Check again after acquiring the lock
+            if (_cache.TryGetValue(key, out employees))
+                return employees!;
+
+            // Only one request reaches the database here
+            employees = await _db.Employees
+                .AsNoTracking()
+                .ToListAsync();
+
+            _cache.Set(
+                key,
+                employees,
+                TimeSpan.FromMinutes(5));
+
+            return employees;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+}
+```
+
+### How it works
+
+1. Request A finds a cache miss and acquires the lock.
+2. Requests B, C, and D wait for the lock.
+3. Request A queries the database and stores the result in cache.
+4. Request A releases the lock.
+5. The waiting requests acquire the lock one at a time, recheck the cache, and return the cached result.
+
+Why do we check the cache twice? The second check prevents a waiting request from querying the database after the first request has already populated the cache.
+
+Limitations: This simple example uses one global lock, so unrelated cache keys also block one another. A production implementation can use a per-key lock or a single-flight mechanism. The `AppDbContext` should remain scoped and must not be used concurrently by multiple requests.
+
+## 4. Solution 2: Use HybridCache (modern .NET)
+
+For modern .NET applications, `HybridCache` is often a simpler option. It combines an in-process cache with an optional distributed cache and provides stampede protection for concurrent calls to the same key.
+
+Install the package if your target framework does not already provide it:
+
+```
+dotnet add package Microsoft.Extensions.Caching.Hybrid
+```
+
+Register it in `Program.cs`:
+
+```
+builder.Services.AddHybridCache();
+```
+
+Use it in your service:
+
+```
+public class EmployeeService
+{
+    private readonly HybridCache _cache;
+    private readonly AppDbContext _db;
+
+    public EmployeeService(
+        HybridCache cache,
+        AppDbContext db)
+    {
+        _cache = cache;
+        _db = db;
+    }
+
+    public async Task<List<Employee>> GetEmployeesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _cache.GetOrCreateAsync(
+            "employees",
+            async token =>
+                await _db.Employees
+                    .AsNoTracking()
+                    .ToListAsync(token),
+            cancellationToken: cancellationToken);
+    }
+}
+```
+
+Configure a distributed cache such as Redis when you need shared cache storage across application instances. HybridCache's stampede protection coordinates concurrent calls within the applicable cache service instance; it is not a universal distributed lock across every server.
+
+## 5. Which technique should you choose?
+
+Single application instance
+
+Use `IMemoryCache` with per-key locking, or `HybridCache`.
+
+Multiple instances behind a load balancer
+
+Use Redis or another distributed cache with stampede protection appropriate to your deployment.
+
+High-traffic, mostly read-only data
+
+Use background refresh or stale-while-revalidate to avoid a cold-cache spike.
+
+## Interview-ready answer
+
+“A cache stampede occurs when a popular cache entry expires and multiple concurrent requests attempt to regenerate the same value, causing excessive database load. I can prevent it using a per-key lock or single-flight mechanism, use `HybridCache` for built-in stampede protection, and use Redis for shared caching across application instances. For frequently accessed data, I can also refresh the cache proactively or serve stale data while refreshing it. The right approach depends on whether the application runs on one instance or multiple instances and whether stale data is acceptable.”
 ---
 
 # 🔥 30. How do you improve .NET API performance?
