@@ -175,6 +175,13 @@ Each middleware can:
 
 # 🔥 6. `Use`, `Run`, and `Map`
 
+Use() — Executes logic and can pass the request to the next middleware.
+
+Run() — Terminates the pipeline; it does not accept a next delegate.
+
+Map() — Creates a separate branch of the pipeline based on the request path.
+
+
 ### Use
 
 Can call the next middleware:
