@@ -599,6 +599,191 @@ Interview answer:
 
 > "I choose based on whether the configuration needs request-scoped snapshots or runtime change notifications."
 
+
+
+In ASP.NET Core, `IOptions`, `IOptionsSnapshot`, and `IOptionsMonitor` help you read configuration settings from `appsettings.json` in a clean, type-safe way.
+
+Think of a configuration setting such as a payment API URL, email server, or application name.
+
+The main difference is when you get the value and whether you can see configuration changes without restarting the application.
+
+## 1. Real-life example
+
+Imagine your application has this setting:
+
+```
+{
+  "EmailSettings": {
+    "SmtpServer": "smtp.old.com",
+    "Port": 587
+  }
+}
+```
+
+Your application reads the email configuration. Later, someone changes `SmtpServer` to `"smtp.new.com"`.
+
+- `IOptions<T>` — gives you the standard options value; it doesn't provide automatic refresh of the existing options instance.
+- `IOptionsSnapshot<T>` — provides a cached snapshot for the current DI scope, typically one HTTP request.
+- `IOptionsMonitor<T>` — can provide the current value and notify you when configuration changes, if the configuration provider supports reload.
+
+## 2. First, create the settings class
+
+`EmailSettings.cs`
+
+```
+public class EmailSettings
+{
+    public string SmtpServer { get; set; } = "";
+    public int Port { get; set; }
+}
+```
+
+Register the configuration in `Program.cs`:
+
+```
+builder.Services.Configure<EmailSettings>(
+    builder.Configuration.GetSection("EmailSettings"));
+```
+
+Now let's see how each option works.
+
+## 3. `IOptions<T>` — Standard configuration
+
+Use it when your application needs configuration values that generally remain fixed for the lifetime of the options instance.
+
+```
+public class EmailService
+{
+    private readonly EmailSettings _settings;
+
+    public EmailService(IOptions<EmailSettings> options)
+    {
+        _settings = options.Value;
+    }
+
+    public void SendEmail()
+    {
+        Console.WriteLine(_settings.SmtpServer);
+    }
+}
+```
+
+Add this namespace:
+
+```
+using Microsoft.Extensions.Options;
+```
+
+What happens?
+
+- The settings are bound to `EmailSettings`.
+- `options.Value` provides the options instance.
+- The standard `IOptions<T>` instance doesn't automatically refresh its value when configuration changes.
+
+Use case: Application settings that don't need runtime refresh.
+
+## 4. `IOptionsSnapshot<T>` — Configuration per request
+
+Imagine an API receives 100 requests. Each request can resolve its own configuration snapshot.
+
+```
+public class EmailService
+{
+    private readonly EmailSettings _settings;
+
+    public EmailService(IOptionsSnapshot<EmailSettings> options)
+    {
+        _settings = options.Value;
+    }
+}
+```
+
+Register the service as scoped:
+
+```
+builder.Services.AddScoped<EmailService>();
+```
+
+What happens?
+
+- The options value is cached within the current DI scope.
+- In a typical Web API, that means one snapshot per HTTP request.
+- A later request can see updated settings if the configuration provider reloads them.
+
+Use case: Request-scoped configuration that may change between requests.
+
+Important: Don't inject `IOptionsSnapshot<T>` directly into a singleton service because the singleton outlives the request scope.
+
+## 5. `IOptionsMonitor<T>` — Current configuration and change notifications
+
+Imagine an administrator updates an email server setting while your application is running.
+
+```
+public class EmailService
+{
+    private readonly IOptionsMonitor<EmailSettings> _options;
+
+    public EmailService(IOptionsMonitor<EmailSettings> options)
+    {
+        _options = options;
+    }
+
+    public void SendEmail()
+    {
+        var settings = _options.CurrentValue;
+
+        Console.WriteLine(settings.SmtpServer);
+    }
+}
+```
+
+You can also listen for changes:
+
+```
+_options.OnChange(settings =>
+{
+    Console.WriteLine(
+        $"New SMTP server: {settings.SmtpServer}");
+});
+```
+
+What happens?
+
+- `CurrentValue` retrieves the current options value.
+- `OnChange()` lets you react to configuration changes.
+- It works with supported reloadable configuration providers, such as JSON configuration with reload enabled.
+
+Use case: Long-running services, background workers, or settings that need runtime updates.
+
+## 6. Quick comparison
+
+| Feature              | `IOptions<T>`        | `IOptionsSnapshot<T>`  | `IOptionsMonitor<T>`     |
+| -------------------- | -------------------- | ---------------------- | ------------------------ |
+| Value access         | `Value`              | `Value`                | `CurrentValue`           |
+| Refresh behavior     | No automatic refresh | New snapshot per scope | Current value can update |
+| Change notification  | No                   | No                     | `OnChange()`             |
+| Lifetime suitability | Singleton-safe       | Scoped                 | Singleton-safe           |
+| Typical use          | Stable settings      | Per-request settings   | Runtime updates          |
+
+## 7. Interview memory trick
+
+IOptions
+
+Read the standard configuration value.
+
+Snapshot
+
+One cached snapshot per scope, typically per request.
+
+Monitor
+
+Current value + change notifications.
+
+Staff Engineer interview answer:
+
+“I use `IOptions<T>` for standard configuration, `IOptionsSnapshot<T>` when I need a scoped configuration snapshot, and `IOptionsMonitor<T>` when a long-running service needs to observe configuration changes. I also ensure the underlying configuration provider supports reload and that my application handles changes safely.”
+
+
 ---
 
 # 🔥 14. What is ASP.NET Core Web API?
