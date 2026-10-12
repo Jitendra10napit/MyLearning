@@ -38,6 +38,7 @@ p2.X = 20;
 - You need a complex object such as Employee, Order or Customer.
 - Multiple parts of your application need to refer to the same object.
 - You need inheritance or polymorphism.
+  
 **Use a struct when:**
 - You represent a small value, such as a point, coordinate or measurement.
 - Copying the value should create an independent value.
