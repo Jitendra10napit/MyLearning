@@ -1580,6 +1580,51 @@ For atomic counters use:
 Interlocked.Increment(ref _counter);
 ```
 
+In C#, `volatile` helps one thread see when another thread changes a variable's value.
+
+## 1. Simple real-life example
+
+Imagine a worker in an office.
+
+- Thread 1 is doing some work.
+- Thread 2 tells the worker to stop by changing a flag to `true`.
+- Thread 1 keeps checking the flag to know when to stop.
+
+```
+class Worker
+{
+    private volatile bool stop = false;
+
+    public void DoWork()
+    {
+        while (!stop)
+        {
+            // Keep working
+        }
+
+        Console.WriteLine("Work stopped!");
+    }
+
+    public void StopWork()
+    {
+        stop = true;
+    }
+}
+```
+
+When another thread calls `StopWork()`, the worker can observe that `stop` has become `true` and exit the loop.
+
+## 2. Remember the difference
+
+- `volatile` = Helps threads see changes to a shared variable.
+- `Interlocked` = Performs an operation atomically, such as incrementing a counter.
+- `lock` = Protects shared data while a block of code executes.
+
+Interview memory trick: `volatile` helps with visibility, not with making every operation thread-safe.
+
+In real .NET applications, prefer `CancellationToken` for stopping background work gracefully.
+
+
 ---
 
 # 🔥 43. What is dependency injection?
