@@ -566,6 +566,136 @@ Func<T>
 Predicate<T>
 ```
 
+In C#, a Delegate is a type-safe reference to a method. It lets you store a method in a variable and call that method later.
+
+Think of a delegate as a remote control: you press a button, and the associated method executes.
+
+## 1. Simple example
+
+```
+// Declare a delegate
+delegate void MyDelegate(string message);
+
+class Program
+{
+    static void SayHello(string message)
+    {
+        Console.WriteLine(message);
+    }
+
+    static void Main()
+    {
+        MyDelegate d = SayHello;
+        d("Hello, Jitendra!");
+    }
+}
+```
+
+Output:
+
+```
+Hello, Jitendra!
+```
+
+Remember: A delegate defines which method signature is allowed. The assigned method must match its return type and parameters.
+
+## 2. Types of delegates in C\#
+
+The main delegate types you'll discuss in interviews are:
+
+### 1. Action
+
+Returns void
+
+Used when a method performs an operation but returns no value.
+
+```
+Action<string> print = message =>
+    Console.WriteLine(message);
+
+print("Hello");
+```
+
+### 2. Func
+
+Returns a value
+
+Used when a method returns a result.
+
+```
+Func<int, int, int> add =
+    (a, b) => a + b;
+
+Console.WriteLine(add(10, 20)); // 30
+```
+
+The last generic type (`int`) is the return type.
+
+### 3. Predicate
+
+Returns bool
+
+Used to test a condition.
+
+```
+Predicate<int> isEven =
+    n => n % 2 == 0;
+
+Console.WriteLine(isEven(10)); // True
+```
+
+### 4. Multicast
+
+Multiple methods
+
+A delegate can invoke multiple compatible methods in sequence.
+
+```
+Action notify = SendEmail;
+notify += SendSms;
+
+notify(); // Calls both methods
+```
+
+This is a delegate capability, not a separate built-in generic delegate type.
+
+## 3. Quick comparison
+
+| Delegate           | Purpose                          | Example       |
+| ------------------ | -------------------------------- | ------------- |
+| Custom delegate    | Define your own method signature | `MyDelegate`  |
+| `Action`           | No return value                  | Logging       |
+| `Func`             | Returns a value                  | Calculation   |
+| `Predicate`        | Returns `bool`                   | Validation    |
+| Multicast delegate | Invoke multiple methods          | Notifications |
+
+## 4. Real-world use in .NET
+
+Delegates are useful for:
+
+- LINQ: `Where()` and `Select()` accept delegates through `Func`-style parameters.
+- Events: Notify subscribers when something happens.
+- Callbacks: Execute a method after another operation finishes.
+- Flexible behavior: Pass a method as a parameter instead of hardcoding the logic.
+
+For example, in LINQ:
+
+```
+int[] numbers = { 1, 2, 3, 4, 5 };
+
+var result = numbers.Where(n => n > 3);
+
+Console.WriteLine(string.Join(", ", result));
+// 4, 5
+```
+
+The lambda `n => n > 3` specifies the condition that `Where()` uses.
+
+## 5. Interview answer to remember
+
+“A delegate in C# is a type-safe reference to a method. It allows methods to be passed as parameters, stored in variables, and invoked later. Common built-in generic delegates are `Action`, `Func`, and `Predicate`. Delegates are also the foundation of the C# event model and are widely used in callbacks and LINQ.”
+
+Memory trick: `Action` = do something, `Func` = return something, `Predicate` = check something.
 ---
 
 # 🔥 14. Action vs Func vs Predicate
