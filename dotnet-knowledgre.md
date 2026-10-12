@@ -788,36 +788,103 @@ Staff Engineer interview answer:
 
 # 🔥 14. What is ASP.NET Core Web API?
 
-A framework for building HTTP-based APIs.
+ ASP.NET Core Web API is a framework for building HTTP services using .NET. It allows applications such as Angular, React, mobile apps, and other backend services to communicate with your server and exchange data, commonly using JSON.
 
-Typical flow:
+## 1. Real-life example
 
-```text
-HTTP Request
-     ↓
-Controller
-     ↓
-Service
-     ↓
-Repository / EF Core
-     ↓
-Database
+Imagine you are building an Employee Management application.
+
+- Angular displays the employee list.
+- ASP.NET Core Web API receives requests and applies business logic.
+- SQL Server stores employee information.
+
+Angular Frontend
+
+Requests employee data
+
+ASP.NET Core Web API
+
+Controllers · Services · Validation · Authentication
+
+SQL Server
+
+Stores employee records
+
+## 2. Simple C# example
+
+Create an API controller that returns employee data.
+
 ```
+using Microsoft.AspNetCore.Mvc;
 
-Example:
-
-```csharp
 [ApiController]
 [Route("api/[controller]")]
-public class OrdersController : ControllerBase
+public class EmployeesController : ControllerBase
 {
-    [HttpGet("{id}")]
-    public async Task<IActionResult> Get(int id)
+    [HttpGet]
+    public IActionResult GetEmployees()
     {
-        ...
+        var employees = new[]
+        {
+            new { Id = 1, Name = "Rahul" },
+            new { Id = 2, Name = "Priya" }
+        };
+
+        return Ok(employees);
     }
 }
 ```
+
+When a client sends a GET request to:
+
+```
+GET /api/employees
+```
+
+The API returns an HTTP `200 OK` response with JSON:
+
+```
+[
+  { "id": 1, "name": "Rahul" },
+  { "id": 2, "name": "Priya" }
+]
+```
+
+Here:
+
+- `[ApiController]` enables API-specific behavior.
+- `[Route("api/[controller]")]` defines the URL pattern.
+- `[HttpGet]` maps HTTP GET requests to the method.
+- `Ok()` returns an HTTP 200 response.
+
+This example uses in-memory data; a production API would typically retrieve records through a service and database.
+
+## 3. Common HTTP methods in Web API
+
+| Method   | Purpose                   | Example               |
+| -------- | ------------------------- | --------------------- |
+| `GET`    | Retrieve data             | Get employees         |
+| `POST`   | Create data               | Add employee          |
+| `PUT`    | Replace/update a resource | Update employee       |
+| `PATCH`  | Partially update data     | Change employee email |
+| `DELETE` | Delete data               | Remove employee       |
+
+## 4. Important features of ASP.NET Core Web API
+
+- Middleware: Handles authentication, logging, exception handling, and other request-processing concerns.
+- Dependency Injection: Supplies services to controllers and other components.
+- Routing: Maps URLs and HTTP methods to endpoints.
+- Model validation: Checks incoming request data.
+- Authentication and authorization: Protects endpoints.
+- Async/await: Supports scalable asynchronous I/O.
+- Entity Framework Core: Enables database access through .NET objects.
+- Swagger/OpenAPI: Documents and helps test API endpoints.
+
+## 5. Interview answer
+
+“ASP.NET Core Web API is a cross-platform framework for building HTTP-based services in .NET. It exposes endpoints that clients can consume using standard HTTP methods and commonly exchange JSON data. It provides routing, middleware, dependency injection, authentication, authorization, validation, and asynchronous processing. I use it to build secure, scalable backend services that integrate with databases, frontend applications, and other services.”
+
+Remember: Frontend sends the request → Web API processes it → Database provides or stores data → Web API returns the response.
 
 ---
 
