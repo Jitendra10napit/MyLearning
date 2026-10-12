@@ -539,6 +539,7 @@ Staff-level answer:
 
 > "I generally prefer composition over inheritance when behavior needs to vary independently because it avoids deep inheritance hierarchies and makes dependencies explicit."
 
+Inheritance reuses behavior through a parent-child relationship. Composition reuses behavior by combining objects that work together.
 ---
 
 # 🔥 13. What are delegates?
