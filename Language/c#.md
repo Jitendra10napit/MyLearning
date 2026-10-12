@@ -2045,25 +2045,70 @@ One important detail: these conversions are supported only where the generic int
 
 # 🔥 54. What are extension methods?
 
-Example:
+ In C#, extension methods let you add a new method to an existing class or type without modifying its original code or creating a derived class.
 
-```csharp
+Think of it as adding a new feature to an existing tool.
+
+## 1. Simple example
+
+Imagine you want to add a `WordCount()` method to the built-in `string` type.
+
+```
 public static class StringExtensions
 {
-    public static bool IsValidEmail(this string value)
+    public static int WordCount(this string text)
     {
-        ...
+        return text.Split(' ').Length;
     }
 }
 ```
 
-Usage:
+Now you can call it like this:
 
-```csharp
-email.IsValidEmail();
+```
+string message = "Hello World from CSharp";
+
+int count = message.WordCount();
+
+Console.WriteLine(count); // 4
 ```
 
-The method is statically dispatched; extension methods don't actually modify the original type.
+Normally, `string` doesn't have our custom `WordCount()` method. The extension method makes it callable as if it were an instance method.
+
+## 2. How does it work?
+
+The important keyword is `this`:
+
+```
+public static int WordCount(this string text)
+```
+
+- `static class`: The extension method must be declared inside a static, non-nested class.
+- `static method`: The method itself must be static.
+- `this string text`: Specifies the type being extended.
+
+The compiler lets you call `message.WordCount()`, passing `message` as the first argument.
+
+## 3. Real-world .NET example
+
+LINQ uses extension methods extensively.
+
+```
+int[] numbers = { 10, 20, 30, 40 };
+
+var result = numbers.Where(n => n > 20);
+
+Console.WriteLine(string.Join(", ", result));
+// 30, 40
+```
+
+`Where()` is an extension method available for `IEnumerable<T>`, allowing filtering directly on the collection.
+
+## 4. Interview memory trick
+
+Extension method = Add functionality without modifying the original type.
+
+Remember: extension methods don't actually modify the class. They provide convenient syntax for calling static methods.
 
 ---
 
