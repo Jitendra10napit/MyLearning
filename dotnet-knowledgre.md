@@ -2027,13 +2027,113 @@ PATCH  /api/orders/10
 DELETE /api/orders/10
 ```
 
-Important REST concepts:
+## Important REST concepts:
 
 * resources
 * statelessness
 * HTTP semantics
 * appropriate status codes
 * cacheability where applicable
+
+### Depth understanding:
+
+  REST (Representational State Transfer) is an architectural style for designing web APIs that allow clients and servers to communicate over HTTP using resources and standard HTTP methods.
+
+In simple English: REST means designing APIs around resources, such as employees or orders, and using HTTP methods to work with them.
+
+## 1. Real-life example
+
+Imagine you are building an Employee Management application.
+
+Your Angular frontend needs to view, create, update, and delete employees. Your ASP.NET Core Web API exposes REST-style endpoints for these operations.
+
+## 2. REST API example
+
+Suppose your API base URL is `https://api.example.com`.
+
+| HTTP method | Endpoint             | Purpose                       |
+| ----------- | -------------------- | ----------------------------- |
+| `GET`       | `/api/employees`     | Get all employees             |
+| `GET`       | `/api/employees/101` | Get employee 101              |
+| `POST`      | `/api/employees`     | Create an employee            |
+| `PUT`       | `/api/employees/101` | Replace/update employee 101   |
+| `PATCH`     | `/api/employees/101` | Partially update employee 101 |
+| `DELETE`    | `/api/employees/101` | Delete employee 101           |
+
+Notice that the URL represents the resource (`employees`), while the HTTP method specifies the action.
+
+## 3. Simple ASP.NET Core example
+
+```
+[ApiController]
+[Route("api/[controller]")]
+public class EmployeesController : ControllerBase
+{
+    [HttpGet]
+    public IActionResult GetEmployees()
+    {
+        return Ok(new[]
+        {
+            new { Id = 101, Name = "Rahul" },
+            new { Id = 102, Name = "Priya" }
+        });
+    }
+
+    [HttpGet("{id:int}")]
+    public IActionResult GetEmployee(int id)
+    {
+        return Ok(new { Id = id, Name = "Rahul" });
+    }
+
+    [HttpPost]
+    public IActionResult CreateEmployee(Employee employee)
+    {
+        return CreatedAtAction(
+            nameof(GetEmployee),
+            new { id = employee.Id },
+            employee);
+    }
+}
+```
+
+For example, calling `GET /api/employees/101` returns employee information as JSON:
+
+```
+{
+  "id": 101,
+  "name": "Rahul"
+}
+```
+
+The example illustrates the endpoint structure; a production implementation would retrieve and persist employee data through a service and database.
+
+## 4. Important REST principles
+
+- Client-server: Frontend and backend have separate responsibilities.
+- Stateless: Each request contains the information needed to process it; the server does not rely on stored client session state between requests.
+- Resource-based URLs: Use nouns such as `/employees` and `/orders`.
+- Uniform interface: Use standard HTTP methods and status codes.
+- Cacheability: Responses can indicate whether they may be cached.
+- Layered system: Clients can communicate through intermediaries such as gateways or proxies.
+
+## 5. Common HTTP status codes
+
+| Status code                 | Meaning                                   |
+| --------------------------- | ----------------------------------------- |
+| `200 OK`                    | Request succeeded                         |
+| `201 Created`               | Resource created                          |
+| `204 No Content`            | Request succeeded without a response body |
+| `400 Bad Request`           | Invalid request                           |
+| `401 Unauthorized`          | Authentication is missing or invalid      |
+| `403 Forbidden`             | Caller lacks permission                   |
+| `404 Not Found`             | Resource not found                        |
+| `500 Internal Server Error` | Unexpected server error                   |
+
+## 6. Senior-level interview answer
+
+“REST is an architectural style for designing network APIs around resources. In ASP.NET Core, I use resource-oriented URLs, standard HTTP methods, appropriate status codes, stateless request handling, and consistent JSON representations. For example, `GET /api/employees/101` retrieves an employee, while `POST /api/employees` creates one. I also consider pagination, validation, authentication, caching, and API versioning when designing production REST APIs.”
+
+Memory trick: REST = Resources + HTTP methods + Stateless communication.
 
 ---
 
