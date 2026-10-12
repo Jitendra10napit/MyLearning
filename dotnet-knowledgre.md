@@ -1358,6 +1358,339 @@ Examples:
 
 Middleware works at the broader HTTP pipeline level, while MVC filters operate within the MVC/request execution model.
 
+In ASP.NET Core Web API, a filter is code that runs at a specific stage of processing an HTTP request or response. It lets you handle common tasks without repeating the same code in every controller action.
+
+Think of a filter as a security checkpoint: before an action executes, you can check something; after it executes, you can log or modify the result.
+
+## 1. Real-life example
+
+Imagine your Employee API has 50 endpoints. You want to log which action is called.
+
+Without a filter, you might write logging code in all 50 actions.
+
+With a filter, you can centralize that logic and reuse it across controllers or actions.
+
+## 2. Types of filters in ASP.NET Core MVC
+
+| Filter        | When it runs                                                    | Typical use                      |
+| ------------- | --------------------------------------------------------------- | -------------------------------- |
+| Authorization | Before most other filter stages                                 | Check access permissions         |
+| Resource      | Before and after the rest of the MVC pipeline                   | Caching or short-circuiting work |
+| Action        | Before and after a controller action                            | Logging, timing                  |
+| Exception     | When an unhandled exception occurs in the relevant MVC pipeline | Handle action exceptions         |
+| Result        | Before and after action-result execution                        | Result processing                |
+
+Important: Middleware and filters are different. Middleware runs in the HTTP pipeline; MVC filters run at specific stages of MVC processing.
+
+## 3. Example: Create an action filter for logging
+
+Suppose you want to log whenever an API action is called.
+
+### Step 1: Create the filter
+
+```
+using Microsoft.AspNetCore.Mvc.Filters;
+
+public class LoggingFilter : IActionFilter
+{
+    public void OnActionExecuting(ActionExecutingContext context)
+    {
+        Console.WriteLine("Before action executes");
+    }
+
+    public void OnActionExecuted(ActionExecutedContext context)
+    {
+        Console.WriteLine("After action executes");
+    }
+}
+```
+
+- `OnActionExecuting()` runs before the controller action.
+- `OnActionExecuted()` runs after the action has executed.
+
+### Step 2: Apply the filter
+
+```
+[ServiceFilter(typeof(LoggingFilter))]
+[HttpGet]
+public IActionResult GetEmployees()
+{
+    return Ok(new[] { "Rahul", "Priya" });
+}
+```
+
+Register the filter in `Program.cs`:
+
+```
+builder.Services.AddScoped<LoggingFilter>();
+```
+
+When you call `GET /api/employees`, the console shows:
+
+```
+Before action executes
+After action executes
+```
+
+## 4. Apply a filter globally
+
+If you want the filter to run for all controller actions, register it globally:
+
+```
+builder.Services.AddScoped<LoggingFilter>();
+
+builder.Services.AddControllers(options =>
+{
+    options.Filters.AddService<LoggingFilter>();
+});
+```
+
+Now the filter applies to controller actions throughout the application.
+
+## 5. Filter vs Middleware
+
+| Feature                        | Middleware                                          | Filter                                     |
+| ------------------------------ | --------------------------------------------------- | ------------------------------------------ |
+| Runs in                        | HTTP request pipeline                               | MVC/action pipeline                        |
+| Knows about controller actions | Not inherently                                      | Yes                                        |
+| Common uses                    | Exception handling, authentication, request logging | Action logging, action-specific validation |
+| Applies to                     | Requests passing through its pipeline position      | MVC actions/results in its scope           |
+
+For example, use middleware for global exception handling and request correlation. Use an action filter when you need information about a specific controller action or its arguments.
+
+## 6. Interview answer
+
+“Filters in ASP.NET Core MVC allow us to execute reusable logic before or after specific stages of action processing. Common types include authorization, resource, action, exception, and result filters. I use them for cross-cutting concerns such as action logging and timing, while middleware is better suited to concerns that apply across the HTTP pipeline.”
+
+Memory trick: Middleware handles the HTTP pipeline; filters handle specific MVC processing stages.
+
+
+Let's understand these three ASP.NET Core filters with practical scenarios from an enterprise Web API.
+
+- Resource filter: Runs before and after most of the MVC action-processing pipeline. Useful for short-circuiting requests or implementing MVC-level caching.
+- Exception filter: Handles unhandled exceptions that occur within the MVC action/filter pipeline.
+- Result filter: Runs before and after an MVC action result executes, useful for result-processing concerns.
+
+A simple way to remember them:
+
+| Filter    | Think of it as                   |
+| --------- | -------------------------------- |
+| Resource  | Check before doing the main work |
+| Exception | Handle an unexpected failure     |
+| Result    | Process the response result      |
+
+## 1. Resource Filter — Stop a request before the action executes
+
+Scenario: Your application is in maintenance mode. You want to return `503 Service Unavailable` without executing the controller action.
+
+### Step 1: Create the filter
+
+```
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+
+public class MaintenanceModeFilter : IResourceFilter
+{
+    public void OnResourceExecuting(ResourceExecutingContext context)
+    {
+        bool isMaintenanceMode = true;
+
+        if (isMaintenanceMode)
+        {
+            context.Result = new ObjectResult("System under maintenance")
+            {
+                StatusCode = StatusCodes.Status503ServiceUnavailable
+            };
+        }
+    }
+
+    public void OnResourceExecuted(ResourceExecutedContext context)
+    {
+        // Runs after the resource pipeline completes.
+    }
+}
+```
+
+### Step 2: Apply it to a controller
+
+```
+[ServiceFilter(typeof(MaintenanceModeFilter))]
+[ApiController]
+[Route("api/[controller]")]
+public class EmployeesController : ControllerBase
+{
+    [HttpGet]
+    public IActionResult GetEmployees()
+    {
+        Console.WriteLine("Action executed!");
+
+        return Ok(new[] { "Rahul", "Priya" });
+    }
+}
+```
+
+Register the filter in `Program.cs`:
+
+```
+builder.Services.AddScoped<MaintenanceModeFilter>();
+```
+
+What happens?
+
+When you call `GET /api/employees`, the filter returns `503`. The `GetEmployees()` action does not execute.
+
+Other use cases: Short-circuiting requests, checking resource-level conditions, and MVC-level caching.
+
+Staff-level note: For real maintenance mode, use a configurable feature flag or middleware if the rule should apply to the entire HTTP pipeline.
+
+## 2. Exception Filter — Handle an action exception
+
+Scenario: An employee API throws an unexpected exception. You want to return a controlled error response rather than expose internal exception details.
+
+### Step 1: Create the filter
+
+```
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+
+public class ApiExceptionFilter : IExceptionFilter
+{
+    private readonly ILogger<ApiExceptionFilter> _logger;
+
+    public ApiExceptionFilter(ILogger<ApiExceptionFilter> logger)
+    {
+        _logger = logger;
+    }
+
+    public void OnException(ExceptionContext context)
+    {
+        _logger.LogError(
+            context.Exception,
+            "An error occurred while processing the request.");
+
+        context.Result = new ObjectResult(
+            new { Message = "An unexpected error occurred." })
+        {
+            StatusCode = StatusCodes.Status500InternalServerError
+        };
+
+        context.ExceptionHandled = true;
+    }
+}
+```
+
+### Step 2: Apply it to a controller
+
+```
+[ServiceFilter(typeof(ApiExceptionFilter))]
+[ApiController]
+[Route("api/[controller]")]
+public class EmployeesController : ControllerBase
+{
+    [HttpGet]
+    public IActionResult GetEmployees()
+    {
+        throw new Exception("Database connection failed!");
+    }
+}
+```
+
+Register it:
+
+```
+builder.Services.AddScoped<ApiExceptionFilter>();
+```
+
+What happens?
+
+1. The controller action throws an exception.
+2. The exception filter logs the exception.
+3. It returns a generic HTTP `500` response.
+4. `ExceptionHandled = true` marks the exception as handled by MVC.
+
+Example response:
+
+```
+{
+  "message": "An unexpected error occurred."
+}
+```
+
+Other use cases: MVC-specific exception handling and mapping known exceptions to appropriate HTTP responses.
+
+Staff-level note: For centralized exception handling across the HTTP pipeline, prefer ASP.NET Core exception-handling middleware (`UseExceptionHandler`) or a suitable `IExceptionHandler`. Exception filters only handle exceptions within the relevant MVC pipeline stages; they are not a universal replacement for middleware.
+
+## 3. Result Filter — Process the response result
+
+Scenario: Your API team wants to add a custom response header to controller responses.
+
+### Step 1: Create the filter
+
+```
+using Microsoft.AspNetCore.Mvc.Filters;
+
+public class ApiResultFilter : IResultFilter
+{
+    public void OnResultExecuting(ResultExecutingContext context)
+    {
+        context.HttpContext.Response.Headers["X-API-Version"] = "1.0";
+
+        Console.WriteLine("Preparing API response");
+    }
+
+    public void OnResultExecuted(ResultExecutedContext context)
+    {
+        Console.WriteLine("API result execution completed");
+    }
+}
+```
+
+### Step 2: Apply it to the controller
+
+```
+[ServiceFilter(typeof(ApiResultFilter))]
+[ApiController]
+[Route("api/[controller]")]
+public class EmployeesController : ControllerBase
+{
+    [HttpGet]
+    public IActionResult GetEmployees()
+    {
+        return Ok(new[] { "Rahul", "Priya" });
+    }
+}
+```
+
+Register it:
+
+```
+builder.Services.AddScoped<ApiResultFilter>();
+```
+
+What happens?
+
+When you call `GET /api/employees`:
+
+- `OnResultExecuting()` runs before the action result is executed.
+- The response includes `X-API-Version: 1.0`.
+- `OnResultExecuted()` runs after result execution.
+
+Other use cases: Result logging, response metadata, and consistent processing of MVC action results.
+
+Note: A result filter can modify result execution, but it is not guaranteed to run after every kind of response, such as a response that has already started or a short-circuited request.
+
+## 4. Quick interview comparison
+
+| Filter    | Main purpose                          | Example                   |
+| --------- | ------------------------------------- | ------------------------- |
+| Resource  | Short-circuit before action execution | Maintenance mode          |
+| Exception | Handle MVC pipeline exceptions        | Return a controlled error |
+| Result    | Process action-result execution       | Add a response header     |
+
+Senior developer interview answer:
+
+“I use resource filters when I need to short-circuit or work around the MVC resource-processing stage, exception filters for MVC-specific exception handling, and result filters for concerns around action-result execution. For application-wide exception handling, I generally prefer middleware because it covers a broader part of the HTTP pipeline.”
+
 ---
 
 # 🔥 21. Middleware vs filters
