@@ -318,6 +318,20 @@ T2 → Continue
 
 This provides strong consistency but can reduce concurrency.
 
+
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
+BEGIN TRANSACTION;
+
+SELECT *
+FROM dbo.Seats
+WHERE SeatId = 1;
+
+WAITFOR DELAY '00:00:15';
+
+COMMIT TRANSACTION;
+
+
 ---
 
 # 8. Snapshot Isolation — very important for modern applications
@@ -385,6 +399,23 @@ A transaction can read the appropriate version according to its isolation semant
 ### Transaction Log
 
 SQL Server also maintains a transaction log so changes can be recovered and transactions can be committed or rolled back reliably.
+
+USE EmployeeDb;
+SET TRANSACTION ISOLATION LEVEL SNAPSHOT;
+
+BEGIN TRANSACTION;
+
+SELECT Balance
+FROM dbo.BankAccounts
+WHERE AccountId = 1;
+
+WAITFOR DELAY '00:00:15';
+
+SELECT Balance
+FROM dbo.BankAccounts
+WHERE AccountId = 1;
+
+COMMIT TRANSACTION;
 
 ---
 
