@@ -456,6 +456,190 @@ I'd also look at:
 * deadlocks
 * wait statistics
 
+
+# SQL Server Slow Query Tuning — Simple Step-by-Step Guide
+
+For a Senior .NET Engineer or Technical Architect interview, remember this simple rule:
+
+Don't guess the problem. Measure it, find the root cause, fix it, and prove the improvement.
+
+Imagine your .NET API takes 8 seconds to return orders for a customer. Your task is to investigate why.
+
+## The 8-step process to remember
+
+## 1
+
+Capture
+
+Which SQL is slow, and what parameters were passed?
+
+## 2
+
+Execute plan
+
+How is SQL Server executing the query?
+
+## 3
+
+Find the bottleneck
+
+Which operator is consuming resources?
+
+## 4
+
+Compare rows
+
+Does SQL Server estimate the row count correctly?
+
+## 5
+
+Check indexes
+
+Can SQL Server find the data efficiently?
+
+## 6
+
+Check waits
+
+Is it slow, or is it waiting for another session?
+
+## 7
+
+Tune
+
+Change the query or index based on evidence.
+
+## 8
+
+Measure again
+
+Did performance improve without changing results?
+
+## Step 1: Capture the slow SQL
+
+Suppose the API executes this query:
+
+```
+SELECT *
+FROM dbo.PerfOrders
+WHERE CustomerId = 100
+  AND YEAR(OrderDate) = 2025;
+```
+
+First, capture the actual SQL, parameter values, duration, and number of returned rows from EF Core logs or SQL Server monitoring.
+
+Why? We need to reproduce the same problem before fixing it.
+
+## Step 2: Look at the Actual Execution Plan
+
+In DBeaver, open the SQL Editor and enable the actual execution plan if your driver supports it. Execute the query and inspect the plan.
+
+Look for operators such as:
+
+- Table or index scan
+- Index seek
+- Key lookup
+- Sort
+
+A scan isn't automatically bad. The important question is whether SQL Server reads far more data than necessary.
+
+## Step 3: Find the bottleneck
+
+The query uses `YEAR(OrderDate)`. Applying a function to the filtered column can prevent an efficient seek on an ordinary date index.
+
+Rewrite the filter as a range:
+
+```
+SELECT *
+FROM dbo.PerfOrders
+WHERE CustomerId = 100
+  AND OrderDate >= '20250101'
+  AND OrderDate <  '20260101';
+```
+
+This makes the date predicate SARGable, meaning SQL Server can potentially use an index to seek directly into the relevant date range.
+
+## Step 4: Compare estimated rows with actual rows
+
+In the execution plan, suppose SQL Server estimates 10 rows but actually processes 10,000.
+
+That mismatch may lead to a poor plan.
+
+Check the estimated row count, actual row count, and actual rows read. Investigate statistics, parameter sensitivity, and predicate selectivity before deciding on a fix.
+
+## Step 5: Review indexes and statistics
+
+For this query, test an index such as:
+
+```
+CREATE INDEX IX_PerfOrders_Customer_Date
+ON dbo.PerfOrders (CustomerId, OrderDate);
+```
+
+This index supports filtering by customer and date. Check the actual plan and workload before keeping it; every additional index also adds storage and write overhead.
+
+## Step 6: Check blocking and waits
+
+If the query still runs slowly, execute this in another SQL Server session:
+
+```
+SELECT
+    session_id,
+    blocking_session_id,
+    wait_type,
+    wait_time,
+    logical_reads,
+    cpu_time,
+    total_elapsed_time
+FROM sys.dm_exec_requests
+WHERE blocking_session_id <> 0;
+```
+
+If a request is blocked, investigate the blocking transaction. If there is no blocking, check CPU, I/O, memory grants, and query execution metrics.
+
+## Step 7: Tune based on evidence
+
+Choose the fix that matches the root cause:
+
+- Inefficient predicate → rewrite the query.
+- Missing or unsuitable index → test an appropriate index.
+- Incorrect row estimates → investigate statistics and parameter sensitivity.
+- Excessive key lookups → consider a covering index.
+- Blocking → shorten transactions or improve concurrency handling.
+
+Don't make multiple changes at once; otherwise, you won't know which change helped.
+
+## Step 8: Benchmark before and after
+
+Run the original and optimized queries with the same parameters.
+
+```
+SET STATISTICS IO ON;
+SET STATISTICS TIME ON;
+
+SELECT *
+FROM dbo.PerfOrders
+WHERE CustomerId = 100
+  AND OrderDate >= '20250101'
+  AND OrderDate <  '20260101';
+
+SET STATISTICS TIME OFF;
+SET STATISTICS IO OFF;
+```
+
+Compare logical reads, CPU time, elapsed time, actual execution plans, and returned rows. Repeat the tests to account for caching effects.
+
+## Your interview answer — practice saying this aloud
+
+60-second response
+
+“When I encounter a slow SQL query, I follow a systematic performance-tuning process. First, I capture the exact SQL, parameters, execution time, and row count. Then I analyze the actual execution plan to identify expensive operators and compare estimated versus actual rows. Next, I review scans, seeks, key lookups, indexes, and statistics. I also check blocking, waits, and deadlocks to determine whether the problem is query execution or resource contention. Based on the root cause, I optimize the query or index and benchmark before and after using logical reads, CPU time, elapsed time, and result correctness. Finally, I validate the improvement under representative load.”
+
+Copy interview answer
+
+Memory trick: Capture → Plan → Rows → Indexes → Waits → Tune → Measure.
+
+Practice explaining these seven words in your own words rather than memorizing the entire answer word for word. If you like, I can turn the key tuning concepts into flashcards for revision.
 ---
 
 ### 18. What is an execution plan?
