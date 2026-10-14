@@ -1319,7 +1319,7 @@ or better-designed projection depending on the use case.
 
 For your interview, remember this:
 
-```text
+
 EF CORE PERFORMANCE
         │
         ├── IQueryable
@@ -1335,7 +1335,194 @@ EF CORE PERFORMANCE
         ├── Async database I/O
         ├── Query execution plan
         └── Benchmark/profile
+
+
+# EF Core: `AsNoTracking()` vs `AsNoTrackingWithIdentityResolution()`
+
+As a Senior .NET Engineer, the most important thing to understand is that both methods improve read-only query behavior by avoiding the normal change tracking overhead, but they differ in how they handle duplicate entity instances.
+
+Let's understand this with a practical Employee Management example.
+
+## 1. What is change tracking in EF Core?
+
+By default, Entity Framework Core tracks entities returned from a query. It stores information about the entities so that when you modify them and call `SaveChangesAsync()`, EF Core knows what to update.
+
 ```
+var employee = await _context.Employees
+    .FirstOrDefaultAsync(e => e.Id == 1);
+
+employee!.Name = "Rahul";
+
+await _context.SaveChangesAsync();
+```
+
+EF Core detects the name change and generates the appropriate SQL `UPDATE`.
+
+But suppose you are only displaying employees on a dashboard. You don't need change tracking because you're not modifying the database.
+
+```
+var employees = await _context.Employees
+    .ToListAsync();
+```
+
+For read-only queries, tracking can consume unnecessary CPU and memory.
+
+## 2. `AsNoTracking()` — read data without tracking
+
+EF Core returns entities without registering them in the normal change tracker.
+
+```
+var employees = await _context.Employees
+    .AsNoTracking()
+    .Where(e => e.Department == "IT")
+    .ToListAsync();
+```
+
+SQL Server
+
+EF Core executes SELECT
+
+Creates entity objects
+
+No normal change tracking
+
+Less tracking overhead for read-only work
+
+When should you use it?
+
+- Displaying employee lists.
+- Reporting and dashboards.
+- Searching and filtering records.
+- Read-only API endpoints.
+
+### Important limitation
+
+```
+var employee = await _context.Employees
+    .AsNoTracking()
+    .FirstAsync(e => e.Id == 1);
+
+employee.Name = "Rahul";
+
+await _context.SaveChangesAsync();
+```
+
+Changing `employee.Name` modifies the in-memory object, but EF Core does not automatically persist this change because the entity isn't tracked.
+
+If you need to update it, you can explicitly attach it or use a tracked query, taking care to set the correct entity state and modified properties.
+
+## 3. `AsNoTrackingWithIdentityResolution()` — no tracking, but reuse entity instances
+
+This method also avoids normal context change tracking. However, EF Core uses a temporary identity-resolution mechanism while materializing the query results.
+
+Identity resolution means that when the same database entity appears multiple times in a query result, EF Core can reuse the same in-memory object instead of creating multiple instances for that entity.
+
+Consider these tables:
+
+Employees
+
+| Id | Name  |
+| -- | ----- |
+| 1  | Amit  |
+| 2  | Priya |
+
+Projects
+
+| Id  | ProjectName | ManagerId |
+| --- | ----------- | --------- |
+| 101 | Banking     | 1         |
+| 102 | Healthcare  | 1         |
+| 103 | Insurance   | 2         |
+
+Amit manages two projects. If you query projects and include their managers:
+
+```
+var projects = await _context.Projects
+    .AsNoTrackingWithIdentityResolution()
+    .Include(p => p.Manager)
+    .ToListAsync();
+```
+
+The results will conceptually look like this:
+
+Project 101 — Banking
+
+Manager: Amit (Employee ID 1)
+
+Project 102 — Healthcare
+
+Manager: Amit (Employee ID 1)
+
+Same in-memory Amit instance
+
+Both project objects refer to the same manager object for Employee ID 1, rather than separate manager objects.
+
+Without identity resolution, a no-tracking query may materialize separate manager instances for repeated occurrences of the same database entity.
+
+With identity resolution, EF Core maintains a temporary identity map during query materialization, then discards that temporary tracking mechanism after the query results have been generated.
+
+### Verify it in C\#
+
+```
+var projects = await _context.Projects
+    .AsNoTrackingWithIdentityResolution()
+    .Include(p => p.Manager)
+    .ToListAsync();
+
+var bankingManager = projects[0].Manager;
+var healthcareManager = projects[1].Manager;
+
+Console.WriteLine(
+    ReferenceEquals(bankingManager, healthcareManager));
+// True, assuming both projects have the same manager.
+```
+
+`ReferenceEquals` checks whether both variables refer to the exact same object in memory.
+
+## 4. Side-by-side comparison
+
+| Feature                                         | `AsNoTracking()`         | `AsNoTrackingWithIdentityResolution()`           |
+| ----------------------------------------------- | ------------------------ | ------------------------------------------------ |
+| Normal EF Core change tracking                  | No                       | No                                               |
+| Temporary identity resolution                   | No                       | Yes                                              |
+| Reuses instances for repeated entity identities | Not guaranteed           | Yes                                              |
+| Memory and CPU overhead                         | Usually lower            | Some additional overhead                         |
+| Best suited for                                 | Simple read-only queries | Read-only queries with repeated related entities |
+| Automatic updates through `SaveChanges()`       | No                       | No                                               |
+
+## 5. Which one should you use in real projects?
+
+Select your query scenario
+
+Simple employee list or dashboard
+
+Projects with repeated managers or related entities
+
+Fetch employee, modify it, and save changes
+
+Recommended
+
+Use `AsNoTracking()`
+
+```
+var employees = await _context.Employees
+    .AsNoTracking()
+    .ToListAsync();
+```
+
+Avoid the extra identity-resolution overhead when it isn't needed.
+
+## 6. Senior Engineer interview answer
+
+You can explain it in these words:
+
+“`AsNoTracking()` is useful for read-only queries because EF Core doesn't track the returned entities, which reduces change-tracking overhead.
+
+`AsNoTrackingWithIdentityResolution()` also avoids normal change tracking, but it uses a temporary identity map to ensure that repeated occurrences of the same entity are represented by the same object instance.
+
+For simple reporting APIs, I generally prefer `AsNoTracking()`. For read-only queries with complex relationships where the same entity appears multiple times, I consider `AsNoTrackingWithIdentityResolution()`. For operations that modify entities and persist changes, I normally use a tracked query.”
+
+Architect-level takeaway: Neither method automatically makes the SQL query faster. The benefit is primarily reduced entity-tracking overhead and, with identity resolution, avoiding duplicate object instances. Actual performance depends on the query shape, number of entities, relationships, and materialization cost.
 
 ### ⭐ Top 15 questions I'd expect at your level
 
