@@ -137,3 +137,94 @@ Identify dominant queries, choose partition and row keys, avoid hot partitions, 
 ## 6. The 30-second interview answer
 
 > I would choose Azure Table Storage over Azure SQL when the workload involves large volumes of relatively simple data, predictable key-based access, and a need for cost-effective partition-based scaling. For example, I could use it for e-commerce activity tracking or order-status history. I would choose Azure SQL for orders, payments, and inventory where relational integrity, complex queries, and transactions are important. Before selecting Table Storage, I would validate the access patterns and partition-key design because it doesn't offer SQL-style joins or secondary indexes on arbitrary properties.
+
+
+
+## Another way:
+
+**30-second intro**
+"Azure Table Storage is a NoSQL key-value store that's part of an Azure Storage account. It stores structured, schema-less entities and is very cheap and highly scalable for large volumes of simple data. Each entity is identified by a **PartitionKey** and **RowKey**. In .NET we use the `Azure.Data.Tables` SDK. The same SDK also works with Cosmos DB's Table API, which is the premium version."
+
+**Key points to mention**
+- **Structure:** "Storage Account → Table → Entity. An entity is like a row with up to 252 properties and a maximum size of 1 MB."
+- **Keys:** "PartitionKey groups entities and decides distribution. RowKey is unique within a partition. Together they form the primary key."
+- **Indexing:** "Only PartitionKey and RowKey are indexed. There are no secondary indexes, so I design keys around my queries. Querying any other property means a slow, expensive table scan."
+- **Transactions:** "Batch transactions are supported for up to 100 operations, but only within the same partition."
+- **Cost:** "It's one of the cheapest storage options in Azure. You pay per GB and per transaction, with no throughput provisioning."
+- **.NET best practices:** "Reuse `TableClient`, use point queries (PK + RK), use Managed Identity, and use reverse ticks in RowKey to get latest-first ordering."
+
+**Why choose Table Storage**
+- Very low cost for terabytes of data
+- A simple key-value model with no schema management
+- Massive scale for simple lookups
+- Easy to set up, since it lives in a storage account you probably already have
+
+**When to choose it**
+- Logs, audit trails, telemetry history
+- User settings, metadata, configuration lookups
+- Large datasets accessed by known keys
+- Cost-sensitive apps that don't need complex queries or global distribution
+
+**When NOT to choose it**
+- Queries on many different fields: no secondary indexes
+- Guaranteed low latency, global distribution, or SLAs on throughput: use Cosmos DB
+- Relationships, joins, or cross-entity transactions: use Azure SQL
+
+**Example to speak: audit log system**
+"In a multi-tenant app we need to store audit logs of every user action. It's huge volume, mostly written, and read only by tenant and date. Table Storage fits perfectly because it's cheap and the access pattern is key-based."
+
+- **PartitionKey:** `tenantId_yyyyMMdd`, for example `t42_20261022`. "This spreads load across partitions and lets me fetch one tenant's logs for a day quickly."
+- **RowKey:** reverse ticks plus a GUID. "Reverse ticks put the newest logs first, since Table Storage sorts by RowKey."
+
+```csharp
+public class AuditLog : ITableEntity
+{
+    public string PartitionKey { get; set; } = default!;
+    public string RowKey { get; set; } = default!;
+    public DateTimeOffset? Timestamp { get; set; }
+    public ETag ETag { get; set; }
+
+    public string UserId { get; set; } = default!;
+    public string Action { get; set; } = default!;
+}
+
+// Registered once as a singleton
+builder.Services.AddSingleton(_ =>
+    new TableClient(new Uri(tableUri), "AuditLogs", new DefaultAzureCredential()));
+
+public class AuditService(TableClient table)
+{
+    public Task Log(string tenantId, string userId, string action) =>
+        table.AddEntityAsync(new AuditLog
+        {
+            PartitionKey = $"{tenantId}_{DateTime.UtcNow:yyyyMMdd}",
+            RowKey = $"{DateTime.MaxValue.Ticks - DateTime.UtcNow.Ticks:D19}_{Guid.NewGuid()}",
+            UserId = userId,
+            Action = action
+        });
+
+    // Partition query: fast, latest-first
+    public async Task<List<AuditLog>> GetDailyLogs(string tenantId, DateTime day)
+    {
+        var pk = $"{tenantId}_{day:yyyyMMdd}";
+        var logs = new List<AuditLog>();
+        await foreach (var log in table.QueryAsync<AuditLog>(e => e.PartitionKey == pk))
+            logs.Add(log);
+        return logs;
+    }
+}
+```
+
+**Quick one-liner examples**
+- **App configuration or feature flags:** PK = `appName`, RK = `settingKey`
+- **User preferences:** PK = `userId`, RK = `preferenceName`
+- **IoT history (cold data):** PK = `deviceId_yyyyMM`, RK = reverse ticks
+
+**A bad partition key to call out**
+"Using one fixed PartitionKey for everything puts all traffic on a single partition, which causes throttling (503 Server Busy). Using a unique GUID per entity means range queries become full scans."
+
+**Table Storage vs Cosmos DB (likely follow-up)**
+"Both use the same data model and SDK. Table Storage is cheaper but has no secondary indexes, no global distribution, and no latency SLAs. Cosmos DB Table API adds automatic indexing on all properties, global distribution, and guaranteed low latency at a higher cost. I start with Table Storage for cheap key-based data and move to Cosmos DB when I need performance guarantees or richer queries; the code barely changes."
+
+**Closing line**
+"Table Storage is my choice for huge volumes of simple, key-accessed data where cost matters more than query flexibility. The key to using it well is designing PartitionKey and RowKey around your exact queries."
