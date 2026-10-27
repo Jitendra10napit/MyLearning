@@ -26,3 +26,9 @@ https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/instal
 
 
 https://github.com/pravinmenghani1/Capstone-2-Banking-Customer-Support-AI-Agent
+
+
+RAG Application From Scratch: .NET Core, Angular & Azure AI
+https://github.com/sandeeppatil-newvision/RAGApplication/blob/main/RAG.API/Services/AzureAIService.cs
+https://github.com/sandeeppatil-newvision/RAGApplication.UI
+
