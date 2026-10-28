@@ -251,6 +251,13 @@ Sure. I have over 13 years of experience in software engineering, primarily work
 Currently, I'm working as a Specialist Software Engineer at NICE, where I've been involved in developing enterprise-level applications and backend services. 
 My experience covers the complete software development lifecycle, from understanding requirements and designing solutions to development, testing, deployment and production support.
 
+As a Solution Architect, I focus on designing scalable, high-performance, and reliable software solutions across distributed systems and cloud-based platforms. I have strong experience with Microsoft Azure services, including Azure Functions, Azure Service Bus, Azure API Management, and Azure Storage, along with CI/CD pipelines and DevOps practices.
+
+I apply design patterns, Clean Architecture principles, event-driven architecture, and API design best practices to build maintainable and resilient systems. I also enjoy solving complex technical challenges, evaluating architectural trade-offs, mentoring developers, and collaborating with teams to translate business requirements into effective technical solutions.
+
+
+
+
 As a Solution Architect, I design solutions for system architecture, scalability, performance, distributed systems, and cloud-based platforms. I've worked with Azure services such as Azure Functions, Service Bus, API Management and Storage, along with CI/CD and DevOps practices.
 I'm also comfortable working with design patterns, clean architecture, event-driven systems and API design, and I enjoy solving complex technical problems and helping other developers when needed.
 
