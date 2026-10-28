@@ -248,8 +248,10 @@ So my role is a combination of **hands-on engineering, architecture, technical l
 
 
 Sure. I have over 13 years of experience in software engineering, primarily working with the Microsoft technology stack, including C#, .NET, ASP.NET Core, Web APIs, SQL Server and Azure.
-Currently, I'm working as a Specialist Software Engineer at NICE, where I've been involved in developing enterprise-level applications and backend services. My experience covers the complete software development lifecycle, from understanding requirements and designing solutions to development, testing, deployment and production support.
-As a Solution Architect, I actively design solutions for system architecture, scalability, performance, distributed systems and cloud-based solutions. I've worked with Azure services such as Azure Functions, Service Bus, API Management and Storage, along with CI/CD and DevOps practices.
+Currently, I'm working as a Specialist Software Engineer at NICE, where I've been involved in developing enterprise-level applications and backend services. 
+My experience covers the complete software development lifecycle, from understanding requirements and designing solutions to development, testing, deployment and production support.
+
+As a Solution Architect, I design solutions for system architecture, scalability, performance, distributed systems, and cloud-based platforms. I've worked with Azure services such as Azure Functions, Service Bus, API Management and Storage, along with CI/CD and DevOps practices.
 I'm also comfortable working with design patterns, clean architecture, event-driven systems and API design, and I enjoy solving complex technical problems and helping other developers when needed.
 
 More recently, I've also been exploring AI-assisted software engineering, LLMs, RAG, AI agents and MCP, because I believe these technologies are becoming increasingly important for modern engineering teams.
