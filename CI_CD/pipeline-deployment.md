@@ -60,3 +60,151 @@ You release the new version to a **small group of users first**, for example 5%.
 - **Canary:** move users **gradually**, a small percentage first.
 
 **Easy way to remember:** *Canary* comes from the "canary in a coal mine": test on a few first, and if they're safe, everyone goes.
+
+
+
+**Shared YAML templates** are reusable pipeline pieces (steps, jobs or stages) kept in **one central repo**. Each microservice pipeline **calls the template and passes parameters** instead of copying the same YAML everywhere.
+
+**Why use them:** you write it once and use it everywhere, every team gets the same build, test and security steps, and fixing or updating something in one place updates all pipelines.
+
+## 1. Folder structure (central repo: `pipeline-templates`)
+
+```
+pipeline-templates/
+├── build-dotnet.yml      ← build + test + scan + docker push
+└── deploy-app.yml        ← deploy to any environment
+```
+
+## 2. Build template: `build-dotnet.yml`
+
+```yaml
+parameters:
+  - name: projectPath        # which service to build
+    type: string
+  - name: imageName
+    type: string
+  - name: dotnetVersion
+    type: string
+    default: '10.x'
+
+steps:
+  - task: UseDotNet@2
+    inputs:
+      version: ${{ parameters.dotnetVersion }}
+
+  - script: dotnet build ${{ parameters.projectPath }} -c Release
+    displayName: 'Build'
+
+  - script: dotnet test ${{ parameters.projectPath }} -c Release
+    displayName: 'Unit Tests'
+
+  # Security scan – every team gets it automatically
+  - script: dotnet list ${{ parameters.projectPath }} package --vulnerable
+    displayName: 'Vulnerability Scan'
+
+  - task: Docker@2
+    inputs:
+      containerRegistry: 'acr-connection'
+      repository: ${{ parameters.imageName }}
+      command: buildAndPush
+      tags: '$(Build.SourceVersion)'
+```
+
+## 3. Deploy template: `deploy-app.yml`
+
+```yaml
+parameters:
+  - name: environment        # dev / qa / prod
+    type: string
+  - name: appName
+    type: string
+  - name: imageName
+    type: string
+
+jobs:
+  - deployment: Deploy_${{ parameters.environment }}
+    environment: ${{ parameters.environment }}   # approvals set here
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - task: AzureCLI@2
+              inputs:
+                azureSubscription: 'azure-${{ parameters.environment }}'
+                scriptType: bash
+                scriptLocation: inlineScript
+                inlineScript: |
+                  az containerapp update \
+                    -n ${{ parameters.appName }}-${{ parameters.environment }} \
+                    -g rg-${{ parameters.environment }} \
+                    --image myregistry.azurecr.io/${{ parameters.imageName }}:$(Build.SourceVersion)
+```
+
+## 4. A microservice pipeline that uses the templates
+
+In the **OrderService** repo, `azure-pipelines.yml` becomes very short:
+
+```yaml
+trigger:
+  branches: { include: [ main ] }
+
+# Link to the central templates repo
+resources:
+  repositories:
+    - repository: templates
+      type: git
+      name: Platform/pipeline-templates
+      ref: refs/tags/v1.2        # pin a version for stability
+
+stages:
+- stage: Build
+  jobs:
+  - job: Build
+    pool: { vmImage: 'ubuntu-latest' }
+    steps:
+      - template: build-dotnet.yml@templates
+        parameters:
+          projectPath: 'src/OrderService'
+          imageName: 'orderservice'
+
+- stage: Dev
+  jobs:
+  - template: deploy-app.yml@templates
+    parameters: { environment: dev, appName: orderservice, imageName: orderservice }
+
+- stage: Prod
+  dependsOn: Dev
+  jobs:
+  - template: deploy-app.yml@templates
+    parameters: { environment: prod, appName: orderservice, imageName: orderservice }
+```
+
+**PaymentService** would use the same templates and only change the parameters (`src/PaymentService`, `paymentservice`).
+
+## 5. Key points to remember
+
+| Concept | Meaning |
+|---|---|
+| `parameters:` | Inputs the template accepts, like method parameters |
+| `${{ parameters.x }}` | Uses a parameter value inside the template |
+| `template: file.yml@templates` | Calls a template from the linked repo |
+| `resources.repositories` | Links the central template repo |
+| `ref: refs/tags/v1.2` | **Version pinning**, so a template change doesn't break every team at once |
+| **Types** | Step, job, stage and variable templates |
+
+## Governance tip: `extends` templates
+
+An architect can **force** teams to use the approved pipeline:
+
+```yaml
+extends:
+  template: secure-pipeline.yml@templates
+  parameters:
+    projectPath: 'src/OrderService'
+```
+
+Combined with a **"Required template" check** on the Prod environment, a pipeline that doesn't extend the approved template **can't deploy to Prod**. That way security scans can't be skipped.
+
+## Short interview line
+
+"We kept **shared YAML templates in a central repo** for build, test, security scan and deploy. Each microservice pipeline was only about 20 lines and just passed parameters. We **pinned template versions with tags**, and used **`extends` templates with a required-template check** on Prod so no team could skip the security steps."
