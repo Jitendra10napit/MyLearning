@@ -122,3 +122,77 @@ Expect the panel to push on trade-offs and non-functional requirements more than
 The safest pattern when you answer: state the trade-off, say what you'd pick, say how you'd measure it, then connect it to something you've actually built.
 
 I can turn these into flashcards so you can drill them before the interview.
+
+
+
+
+Here are the same questions, each with an answer in plain English.
+
+**Design choices**
+
+**1. Why use RAG instead of fine-tuning the model?**
+RAG looks up your documents at the moment someone asks a question. Fine-tuning teaches the model new habits, but it's bad at remembering facts. If your data changes often, or you need to show where an answer came from, RAG is the better choice.
+
+**2. Why Azure AI Search and not another vector database?**
+AI Search can search by meaning and by exact words at the same time. It also re-ranks results and can filter by user permissions. If your data already lives in PostgreSQL or Cosmos DB, keeping the vectors there can be simpler and cheaper.
+
+**3. How did you decide the chunk size?**
+Small chunks find precise answers but can lose context. Big chunks keep context but bring in extra noise and cost more tokens. I start around 500–1000 tokens with a little overlap, split by headings where possible, then test and adjust.
+
+**4. Why hybrid search instead of only vector search?**
+Vector search understands meaning but can miss exact things like error codes or product IDs. Keyword search catches those. Combining both gives better results.
+
+**Security**
+
+**5. How do you stop users from seeing documents they shouldn't?**
+Each chunk stores which groups are allowed to see it. When a user asks something, we read their groups from their login token and filter the search results. The model only ever sees chunks that user is allowed to see.
+
+**6. What if a document contains hidden instructions to trick the AI (prompt injection)?**
+We treat document text as data, never as commands. We use a strict system prompt and Azure's Prompt Shields to detect attacks. The model also gets no permission to do anything risky, like changing or deleting data.
+
+**7. How do you protect personal data?**
+Services talk over private networks, we use Managed Identity instead of passwords or keys, and data stays in the required region. If needed, we remove personal details before storing documents.
+
+**Scale, speed, cost**
+
+**8. How would you load 10 million documents?**
+Don't process them one by one. New files trigger events that go into a queue, and Durable Functions process many files in parallel with automatic retries. We hash each file so unchanged files aren't processed again, which saves time and money.
+
+**9. What if Azure OpenAI says "too many requests"?**
+We retry with small waits in between. We put API Management in front to spread load across several deployments or regions. For steady heavy traffic, we buy reserved capacity (PTU).
+
+**10. How do you keep answers fast?**
+Searching is quick; generating the answer takes most of the time. So we stream the answer word by word, send only the most useful chunks, and cache answers to common questions.
+
+**11. How do you keep costs low?**
+Use a cheaper model for easy questions, send fewer chunks, cache repeated answers, and never re-process unchanged files. Track token usage per customer so you know who costs what.
+
+**Quality and operations**
+
+**12. How do you know the answers are correct?**
+Keep a fixed list of test questions with known good answers. Every time we change the prompt, model or chunking, we run the tests and check the answers are based on the documents and actually relevant.
+
+**13. What happens if you change the embedding model?**
+Vectors from the old and new model can't be mixed, so every document must be processed again. We build a new index alongside the old one, then switch over once it's ready, with no downtime.
+
+**14. How do you handle updated or deleted documents?**
+When a file changes, an event tells the system to update or remove its chunks. The question to agree on is how quickly the index must catch up, for example within minutes or overnight.
+
+**15. What do you monitor?**
+The question, which chunks were found, their scores, token usage, response time and user feedback (with personal data masked). This shows whether a bad answer came from bad search or from the model.
+
+**Tricky architect questions**
+
+**One index for all customers or one per customer?**
+For many small customers, use one shared index filtered by customer ID, which is cheaper. For big or highly regulated customers, give them their own index for stronger separation.
+
+**When should you NOT use RAG?**
+When the data sits in database tables, let the AI write queries or call APIs instead. When answers must be exactly right every time, use normal code. When the data is small enough to fit in one prompt, you don't need search at all.
+
+**What usually breaks first in production?**
+Usually the search part, not the AI model. If chunking is poor or important info is missing, the model confidently gives a wrong answer.
+
+**Build it yourself or use a ready-made Azure tool?**
+Ready-made tools like Copilot Studio are faster to launch. A custom build gives full control over security, chunking and testing. Choose based on how much control the business needs.
+
+**A simple formula for any answer:** say the options, say which one you'd pick and why, say how you'd measure it, and give a real example from your own work.
