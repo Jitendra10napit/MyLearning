@@ -1996,6 +1996,4 @@ If you can comfortably explain **Clean Architecture + Microservices + CQRS + Eve
 <img width="1905" height="1070" alt="image" src="https://github.com/user-attachments/assets/7f9c0535-b318-439d-8013-932fc948fb59" />
 
 
-
-
-<img width="1905" height="1070" alt="image" src="https://github.com/user-attachments/assets/922fdece-98ec-49dd-bc39-bcc48781b8d2" />
+<img width="1916" height="1075" alt="image" src="https://github.com/user-attachments/assets/66b92873-e495-4bbc-ae09-af1baa5e38cc" />
