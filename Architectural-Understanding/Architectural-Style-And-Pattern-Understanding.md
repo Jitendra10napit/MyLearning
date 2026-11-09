@@ -1988,9 +1988,10 @@ If you can comfortably explain **Clean Architecture + Microservices + CQRS + Eve
 ## Onion Architecture
 
 
-<img width="1967" height="1075" alt="image" src="https://github.com/user-attachments/assets/1cf067df-54b2-462f-84ef-bdf81810da3a" />
+ <img width="1898" height="1071" alt="image" src="https://github.com/user-attachments/assets/5597b795-b536-46ad-bbd0-7859f67409e4" />
 
 
+### Difference between Clean and Onion
 
 
 <img width="1905" height="1070" alt="image" src="https://github.com/user-attachments/assets/7f9c0535-b318-439d-8013-932fc948fb59" />
