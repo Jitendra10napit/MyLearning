@@ -1960,3 +1960,29 @@ Remember:
 * Anti-Corruption Layer
 
 If you can comfortably explain **Clean Architecture + Microservices + CQRS + Event Driven + Saga + API Gateway + Repository + Resilience + Caching + Strangler Fig**, you will be able to handle a large portion of architecture questions in a Senior/Technical Lead interview.
+
+
+
+
+
+
+### N- Tier Architecture:
+
+<img width="1941" height="1059" alt="image" src="https://github.com/user-attachments/assets/b252ad2c-6dda-43c9-aedd-54ed228e4c6b" />
+
+
+
+
+## Clean Architecture:
+
+<img width="1967" height="1075" alt="image" src="https://github.com/user-attachments/assets/0e975ed1-ade0-4e2d-b4b6-455d316ba93a" />
+
+
+
+## Onion Architecture
+
+
+<img width="1967" height="1075" alt="image" src="https://github.com/user-attachments/assets/1cf067df-54b2-462f-84ef-bdf81810da3a" />
+
+
+<img width="1905" height="1070" alt="image" src="https://github.com/user-attachments/assets/7f9c0535-b318-439d-8013-932fc948fb59" />
