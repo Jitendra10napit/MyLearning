@@ -1966,6 +1966,8 @@ If you can comfortably explain **Clean Architecture + Microservices + CQRS + Eve
 
 
 
+
+
 ### N- Tier Architecture:
 
 <img width="1941" height="1059" alt="image" src="https://github.com/user-attachments/assets/b252ad2c-6dda-43c9-aedd-54ed228e4c6b" />
@@ -1973,9 +1975,13 @@ If you can comfortably explain **Clean Architecture + Microservices + CQRS + Eve
 
 
 
+
+
 ## Clean Architecture:
 
 <img width="1967" height="1075" alt="image" src="https://github.com/user-attachments/assets/0e975ed1-ade0-4e2d-b4b6-455d316ba93a" />
+
+
 
 
 
