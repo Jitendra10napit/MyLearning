@@ -1991,7 +1991,11 @@ If you can comfortably explain **Clean Architecture + Microservices + CQRS + Eve
  <img width="1898" height="1071" alt="image" src="https://github.com/user-attachments/assets/5597b795-b536-46ad-bbd0-7859f67409e4" />
 
 
+<img width="1902" height="1068" alt="image" src="https://github.com/user-attachments/assets/57fabbae-0771-429f-ae6f-6dce35a5f457" />
+
+
 ### Difference between Clean and Onion
+
 
 
 <img width="1905" height="1070" alt="image" src="https://github.com/user-attachments/assets/7f9c0535-b318-439d-8013-932fc948fb59" />
